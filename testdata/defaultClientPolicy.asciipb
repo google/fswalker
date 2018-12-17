@@ -1,0 +1,10 @@
+version: 1
+max_hash_file_size: 1048576
+include: "/"
+exclude_pfx: "/usr/src/linux-headers"
+exclude_pfx: "/usr/share/"
+exclude_pfx: "/proc/"
+exclude_pfx: "/sys/"
+exclude_pfx: "/tmp/"
+exclude_pfx: "/var/log/"
+exclude_pfx: "/var/tmp/"

@@ -1,0 +1,33 @@
+review: {
+  key: "host-A.google.com"
+  value: {
+    walk_id: "debffdde-47f3-454b-adaa-d79d95945c69"
+    walk_reference: "/some/file/path/hostA_20180922_state.pb"
+    fingerprint: {
+      method: SHA256
+      value: "5669df6b2f003ca61714b1b9830c41cf3a2ebe644abb2516db3021c20a1b7483"
+    }
+  }
+}
+review: {
+  key: "host-B.google.com"
+  value: {
+    walk_id: "2bd40596-d7da-423c-9bb9-c682ebc23f75"
+    walk_reference: "/some/file/path/hostB_20180810_state.pb"
+    fingerprint: {
+      method: SHA256
+      value: "5669df6b2f003ca61714b1b9830c41cf3a2ebe644abb2516db3021c20a1b7483"
+    }
+  }
+}
+review: {
+  key: "host-C.google.com"
+  value: {
+    walk_id: "caf8192e-834f-4cd4-a216-fa6f7871ad41"
+    walk_reference: "/some/file/path/hostC_20180922_state.pb"
+    fingerprint: {
+      method: SHA256
+      value: "5669df6b2f003ca61714b1b9830c41cf3a2ebe644abb2516db3021c20a1b7483"
+    }
+  }
+}

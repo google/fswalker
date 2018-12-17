@@ -1,0 +1,7 @@
+version: 1
+exclude_pfx: "/usr/src/linux-headers"
+exclude_pfx: "/usr/share/"
+exclude_pfx: "/proc/"
+exclude_pfx: "/tmp/"
+exclude_pfx: "/var/log/"
+exclude_pfx: "/var/tmp/"
