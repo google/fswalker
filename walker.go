@@ -32,7 +32,7 @@ import (
 	"github.com/google/uuid"
 
 	tspb "github.com/golang/protobuf/ptypes/timestamp"
-	fspb "github.com/google/fswalker/proto"
+	fspb "github.com/google/fswalker/proto/fswalker"
 )
 
 const (

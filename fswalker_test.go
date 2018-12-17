@@ -24,7 +24,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	fspb "github.com/google/fswalker/proto"
+	fspb "github.com/google/fswalker/proto/fswalker"
 )
 
 const (

@@ -31,7 +31,7 @@ import (
 
 // Generating Go representations for the proto buf libraries.
 
-//go:generate protoc -I=. -I=$GOPATH/src --go_out=paths=source_relative:. proto/fswalker.proto
+//go:generate protoc -I=. -I=$GOPATH/src --go_out=paths=source_relative:. proto/fswalker/fswalker.proto
 
 const (
 	// tsFileFormat is the time format used in file names.
