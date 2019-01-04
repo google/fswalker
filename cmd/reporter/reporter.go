@@ -55,6 +55,7 @@ func updateReviews() bool {
 
 func main() {
 	ctx := context.Background()
+	flag.Parse()
 
 	// Loading configs and walks.
 	if *configFile == "" {
