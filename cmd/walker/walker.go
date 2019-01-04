@@ -19,12 +19,16 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/google/fswalker"
+
+	fspb "github.com/google/fswalker/proto/fswalker"
 )
 
 var (
@@ -34,11 +38,22 @@ var (
 	verbose         = flag.Bool("verbose", false, "when set to true, prints all discovered files including a metadata summary")
 )
 
-func outputPath(pfx string) (string, error) {
-	if pfx == "" {
-		return "", nil
+func writeWalk(walk *fspb.Walk) error {
+	if *outputFilePfx == "" {
+		return nil
 	}
+	outpath, err := outputPath(*outputFilePfx)
+	if err != nil {
+		return err
+	}
+	walkBytes, err := proto.Marshal(walk)
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(outpath, walkBytes, 0444)
+}
 
+func outputPath(pfx string) (string, error) {
 	hn, err := os.Hostname()
 	if err != nil {
 		return "", fmt.Errorf("unable to determine hostname: %v", err)
@@ -48,16 +63,13 @@ func outputPath(pfx string) (string, error) {
 
 func main() {
 	ctx := context.Background()
+	flag.Parse()
 
 	if *policyFile == "" {
 		log.Fatal("policyFile needs to be specified")
 	}
 
-	outpath, err := outputPath(*outputFilePfx)
-	if err != nil {
-		log.Fatal(err)
-	}
-	w, err := fswalker.WalkerFromPolicyFile(ctx, *policyFile, outpath, *verbose)
+	w, err := fswalker.WalkerFromPolicyFile(ctx, *policyFile, writeWalk, *verbose)
 	if err != nil {
 		log.Fatal(err)
 	}

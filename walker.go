@@ -17,7 +17,6 @@ package fswalker
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -27,7 +26,6 @@ import (
 
 	"github.com/google/fswalker/internal/metrics"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/google/uuid"
 
@@ -51,15 +49,18 @@ const (
 	countHashes      = "file-hash-count"
 )
 
+// WriteCallback is a function to write a Walk.
+type WriteCallback func(*fspb.Walk) error
+
 // WalkerFromPolicyFile creates a new Walker based on a policy path.
-func WalkerFromPolicyFile(ctx context.Context, path, outpath string, verbose bool) (*Walker, error) {
+func WalkerFromPolicyFile(ctx context.Context, path string, write WriteCallback, verbose bool) (*Walker, error) {
 	pol := &fspb.Policy{}
 	if err := readTextProto(ctx, path, pol); err != nil {
 		return nil, err
 	}
 	return &Walker{
 		pol:     pol,
-		Outpath: outpath,
+		WriteWalk: write,
 		Verbose: verbose,
 		Counter: &metrics.Counter{},
 	}, nil
@@ -78,8 +79,8 @@ type Walker struct {
 	walk   *fspb.Walk
 	walkMu sync.Mutex
 
-	// Outpath, if non-empty, is where Walk will be written to.
-	Outpath string
+	// Function to use to write the Walk.
+	WriteWalk WriteCallback
 
 	// Verbose, when true, makes Walker print file metadata to stdout.
 	Verbose bool
@@ -351,13 +352,8 @@ func (w *Walker) Run(ctx context.Context) error {
 
 	// Finishing work by writing out the report.
 	w.walk.StopWalk = ptypes.TimestampNow()
-	if w.Outpath == "" {
+	if w.WriteWalk == nil {
 		return nil
 	}
-	// Serialize and write out the walk file.
-	walkBytes, err := proto.Marshal(w.walk)
-	if err != nil {
-		return err
-	}
-	return ioutil.WriteFile(w.Outpath, walkBytes, 0444)
+	return w.WriteWalk(w.walk)
 }
