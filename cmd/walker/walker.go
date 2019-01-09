@@ -38,7 +38,7 @@ var (
 	verbose         = flag.Bool("verbose", false, "when set to true, prints all discovered files including a metadata summary")
 )
 
-func writeWalk(walk *fspb.Walk) error {
+func walkCallback(walk *fspb.Walk) error {
 	if *outputFilePfx == "" {
 		return nil
 	}
@@ -69,10 +69,12 @@ func main() {
 		log.Fatal("policyFile needs to be specified")
 	}
 
-	w, err := fswalker.WalkerFromPolicyFile(ctx, *policyFile, writeWalk, *verbose)
+	w, err := fswalker.WalkerFromPolicyFile(ctx, *policyFile)
 	if err != nil {
 		log.Fatal(err)
 	}
+	w.Verbose = *verbose
+	w.WalkCallback = walkCallback
 
 	// Walk the file system and wait for completion of processing.
 	if err := w.Run(ctx); err != nil {

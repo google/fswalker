@@ -35,19 +35,14 @@ import (
 	fspb "github.com/google/fswalker/proto/fswalker"
 )
 
-type testWriter struct {
-	outpath string
-}
+type outpathWriter string
 
-func (t *testWriter) writeWalk(walk *fspb.Walk) error {
-	if t.outpath == "" {
-		return nil
-	}
+func (o outpathWriter) writeWalk(walk *fspb.Walk) error {
 	walkBytes, err := proto.Marshal(walk)
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(t.outpath, walkBytes, 0444)
+	return ioutil.WriteFile(string(o), walkBytes, 0444)
 }
 
 // testFile implements the os.FileInfo interface.
@@ -88,13 +83,10 @@ func TestWalkerFromPolicyFile(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	wlkr, err := WalkerFromPolicyFile(ctx, path, func(_ *fspb.Walk) error { return nil }, false)
+	wlkr, err := WalkerFromPolicyFile(ctx, path)
 	if err != nil {
 		t.Errorf("WalkerFromPolicyFile() error: %v", err)
 		return
-	}
-	if wlkr.WriteWalk == nil {
-		t.Error("WalkerFromPolicyFile() writer fn not set")
 	}
 	diff := cmp.Diff(wlkr.pol, wantPol)
 	if diff != "" {
@@ -315,7 +307,7 @@ func TestRun(t *testing.T) {
 	}
 	defer os.Remove(tmpfile.Name()) // clean up
 
-	writer := testWriter{tmpfile.Name()}
+	writer := outpathWriter(tmpfile.Name())
 	wlkr := &Walker{
 		pol: &fspb.Policy{
 			Include: []string{
@@ -326,7 +318,7 @@ func TestRun(t *testing.T) {
 			},
 			MaxHashFileSize: 1048576,
 		},
-		WriteWalk: writer.writeWalk,
+		WalkCallback: writer.writeWalk,
 		Counter: &metrics.Counter{},
 	}
 

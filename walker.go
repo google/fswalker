@@ -49,19 +49,19 @@ const (
 	countHashes      = "file-hash-count"
 )
 
-// WriteCallback is a function to write a Walk.
-type WriteCallback func(*fspb.Walk) error
+// WalkCallback is called by Walker at the end of the Run.
+// The callback is typically used to dump the walk to disk and/or perform any other checks.
+// The error return value is propagated back to the Run callers.
+type WalkCallback func(*fspb.Walk) error
 
 // WalkerFromPolicyFile creates a new Walker based on a policy path.
-func WalkerFromPolicyFile(ctx context.Context, path string, write WriteCallback, verbose bool) (*Walker, error) {
+func WalkerFromPolicyFile(ctx context.Context, path string) (*Walker, error) {
 	pol := &fspb.Policy{}
 	if err := readTextProto(ctx, path, pol); err != nil {
 		return nil, err
 	}
 	return &Walker{
 		pol:     pol,
-		WriteWalk: write,
-		Verbose: verbose,
 		Counter: &metrics.Counter{},
 	}, nil
 }
@@ -79,8 +79,8 @@ type Walker struct {
 	walk   *fspb.Walk
 	walkMu sync.Mutex
 
-	// Function to use to write the Walk.
-	WriteWalk WriteCallback
+	// Function to call once the Walk is complete i.e. to inspect or write the Walk.
+	WalkCallback WalkCallback
 
 	// Verbose, when true, makes Walker print file metadata to stdout.
 	Verbose bool
@@ -352,8 +352,8 @@ func (w *Walker) Run(ctx context.Context) error {
 
 	// Finishing work by writing out the report.
 	w.walk.StopWalk = ptypes.TimestampNow()
-	if w.WriteWalk == nil {
+	if w.WalkCallback == nil {
 		return nil
 	}
-	return w.WriteWalk(w.walk)
+	return w.WalkCallback(w.walk)
 }
