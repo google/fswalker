@@ -37,7 +37,7 @@ import (
 
 type outpathWriter string
 
-func (o outpathWriter) writeWalk(walk *fspb.Walk) error {
+func (o outpathWriter) writeWalk(_ context.Context, walk *fspb.Walk) error {
 	walkBytes, err := proto.Marshal(walk)
 	if err != nil {
 		return err

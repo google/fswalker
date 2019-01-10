@@ -38,7 +38,7 @@ var (
 	verbose         = flag.Bool("verbose", false, "when set to true, prints all discovered files including a metadata summary")
 )
 
-func walkCallback(walk *fspb.Walk) error {
+func walkCallback(_ context.Context, walk *fspb.Walk) error {
 	if *outputFilePfx == "" {
 		return nil
 	}
