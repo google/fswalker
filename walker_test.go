@@ -35,6 +35,16 @@ import (
 	fspb "github.com/google/fswalker/proto/fswalker"
 )
 
+type outpathWriter string
+
+func (o outpathWriter) writeWalk(walk *fspb.Walk) error {
+	walkBytes, err := proto.Marshal(walk)
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(string(o), walkBytes, 0444)
+}
+
 // testFile implements the os.FileInfo interface.
 // For more details, see: https://golang.org/src/os/types.go?s=479:840#L11
 type testFile struct {
@@ -55,7 +65,6 @@ func (t *testFile) Sys() interface{}   { return t.sys }
 
 func TestWalkerFromPolicyFile(t *testing.T) {
 	path := filepath.Join(testdataDir, "defaultClientPolicy.asciipb")
-	outpath := "/tmp/testwalk"
 	wantPol := &fspb.Policy{
 		Version:         1,
 		MaxHashFileSize: 1048576,
@@ -74,13 +83,10 @@ func TestWalkerFromPolicyFile(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	wlkr, err := WalkerFromPolicyFile(ctx, path, outpath, false)
+	wlkr, err := WalkerFromPolicyFile(ctx, path)
 	if err != nil {
 		t.Errorf("WalkerFromPolicyFile() error: %v", err)
 		return
-	}
-	if outpath != wlkr.Outpath {
-		t.Errorf("WalkerFromPolicyFile() outpath mismatch: %q != %q", outpath, wlkr.Outpath)
 	}
 	diff := cmp.Diff(wlkr.pol, wantPol)
 	if diff != "" {
@@ -301,6 +307,7 @@ func TestRun(t *testing.T) {
 	}
 	defer os.Remove(tmpfile.Name()) // clean up
 
+	writer := outpathWriter(tmpfile.Name())
 	wlkr := &Walker{
 		pol: &fspb.Policy{
 			Include: []string{
@@ -311,8 +318,8 @@ func TestRun(t *testing.T) {
 			},
 			MaxHashFileSize: 1048576,
 		},
-		Outpath: tmpfile.Name(),
-		Counter: &metrics.Counter{},
+		WalkCallback: writer.writeWalk,
+		Counter:      &metrics.Counter{},
 	}
 
 	if err := wlkr.Run(ctx); err != nil {
