@@ -133,7 +133,7 @@ options.
 The following examples show how to run both the walker and the reporter.
 
 Note that there are libraries for each which can be used independently if so
-desired. See the implementations of waker and reporter main for a reference on
+desired. See the implementations of walker and reporter main for a reference on
 how to use the libraries.
 
 ### Walker
