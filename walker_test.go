@@ -319,7 +319,7 @@ func TestRun(t *testing.T) {
 			MaxHashFileSize: 1048576,
 		},
 		WalkCallback: writer.writeWalk,
-		Counter: &metrics.Counter{},
+		Counter:      &metrics.Counter{},
 	}
 
 	if err := wlkr.Run(ctx); err != nil {
