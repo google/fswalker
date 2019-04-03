@@ -164,11 +164,11 @@ func (r *Reporter) loadLatestWalk(ctx context.Context, hostname, walkPath string
 // successfully, it will return an empty Walk and no error.
 // It returns the file path it ended up reading, the Walk it read and the fingerprint for it.
 func (r *Reporter) loadLastGoodWalk(ctx context.Context, hostname, reviewFile string) (string, *fspb.Walk, *fspb.Fingerprint, error) {
-	reviews := &fspb.Reviews{}
-	if err := readTextProto(ctx, reviewFile, reviews); err != nil {
+	r.reviews := &fspb.Reviews{}
+	if err := readTextProto(ctx, reviewFile, r.reviews); err != nil {
 		return "", nil, nil, err
 	}
-	rvws, ok := reviews.Review[hostname]
+	rvws, ok := r.reviews.Review[hostname]
 	if !ok {
 		return "", nil, nil, nil
 	}
@@ -207,6 +207,7 @@ func (r *Reporter) LoadWalks(ctx context.Context, hostname, reviewFile, walkPath
 		if err := r.sanityCheck(before, after); err != nil {
 			return err
 		}
+		r.reviewFile = reviewFile
 		r.before = before
 		r.beforeFp = beforeFp
 		r.beforeFile = beforeFile
