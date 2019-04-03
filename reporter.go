@@ -164,7 +164,7 @@ func (r *Reporter) loadLatestWalk(ctx context.Context, hostname, walkPath string
 // successfully, it will return an empty Walk and no error.
 // It returns the file path it ended up reading, the Walk it read and the fingerprint for it.
 func (r *Reporter) loadLastGoodWalk(ctx context.Context, hostname, reviewFile string) (string, *fspb.Walk, *fspb.Fingerprint, error) {
-	r.reviews := &fspb.Reviews{}
+	r.reviews = &fspb.Reviews{}
 	if err := readTextProto(ctx, reviewFile, r.reviews); err != nil {
 		return "", nil, nil, err
 	}
