@@ -19,7 +19,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -38,7 +37,7 @@ var (
 	verbose         = flag.Bool("verbose", false, "when set to true, prints all discovered files including a metadata summary")
 )
 
-func walkCallback(_ context.Context, walk *fspb.Walk) error {
+func walkCallback(ctx context.Context, walk *fspb.Walk) error {
 	if *outputFilePfx == "" {
 		return nil
 	}
@@ -50,7 +49,7 @@ func walkCallback(_ context.Context, walk *fspb.Walk) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(outpath, walkBytes, 0444)
+	return fswalker.WriteFile(ctx, outpath, walkBytes, 0444)
 }
 
 func outputPath(pfx string) (string, error) {
