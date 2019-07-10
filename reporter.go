@@ -20,10 +20,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"path"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -120,7 +118,7 @@ func (r *Reporter) fingerprint(b []byte) *fspb.Fingerprint {
 
 // readWalk reads a file as marshaled proto in fspb.Walk format.
 func (r *Reporter) readWalk(ctx context.Context, path string) (*fspb.Walk, *fspb.Fingerprint, error) {
-	b, err := ioutil.ReadFile(path)
+	b, err := ReadFile(ctx, path)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -147,7 +145,7 @@ func (r *Reporter) getFile(path string, files []*fspb.File) *fspb.File {
 // It returns the file path it ended up reading, the Walk it read and the fingerprint for it.
 func (r *Reporter) loadLatestWalk(ctx context.Context, hostname, walkPath string) (string, *fspb.Walk, *fspb.Fingerprint, error) {
 	matchpath := path.Join(walkPath, WalkFilename(hostname, time.Time{}))
-	names, err := filepath.Glob(matchpath)
+	names, err := Glob(ctx, matchpath)
 	if err != nil {
 		return "", nil, nil, err
 	}

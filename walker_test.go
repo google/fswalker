@@ -37,12 +37,12 @@ import (
 
 type outpathWriter string
 
-func (o outpathWriter) writeWalk(_ context.Context, walk *fspb.Walk) error {
+func (o outpathWriter) writeWalk(ctx context.Context, walk *fspb.Walk) error {
 	walkBytes, err := proto.Marshal(walk)
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(string(o), walkBytes, 0444)
+	return WriteFile(ctx, string(o), walkBytes, 0444)
 }
 
 // testFile implements the os.FileInfo interface.
@@ -345,7 +345,7 @@ func TestRun(t *testing.T) {
 		}
 	}
 
-	b, err := ioutil.ReadFile(tmpfile.Name())
+	b, err := ReadFile(ctx, tmpfile.Name())
 	if err != nil {
 		t.Errorf("unable to read file %q: %v", tmpfile.Name(), err)
 	}
