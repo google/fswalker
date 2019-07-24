@@ -131,16 +131,6 @@ func (r *Reporter) readWalk(ctx context.Context, path string) (*fspb.Walk, *fspb
 	return p, fp, nil
 }
 
-// getFile rummages through a list of files to find the one with the right path.
-func (r *Reporter) getFile(path string, files []*fspb.File) *fspb.File {
-	for _, f := range files {
-		if f.Path == path {
-			return f
-		}
-	}
-	return nil
-}
-
 // loadLatestWalk looks for the latest Walk in a given folder for a given hostname.
 // It returns the file path it ended up reading, the Walk it read and the fingerprint for it.
 func (r *Reporter) loadLatestWalk(ctx context.Context, hostname, walkPath string) (string, *fspb.Walk, *fspb.Fingerprint, error) {
@@ -413,7 +403,18 @@ func (r *Reporter) count(metric string) {
 func (r *Reporter) Compare(out io.Writer) {
 	// Processing report.
 	output := map[action][]actionData{}
-	walked := map[string]bool{}
+	walkedBefore := map[string]*fspb.File{}
+	walkedAfter := map[string]*fspb.File{}
+
+	if r.before != nil {
+		for _, fb := range r.before.File {
+			walkedBefore[fb.Path] = fb
+		}
+	}
+	for _, fa := range r.after.File {
+		walkedAfter[fa.Path] = fa
+	}
+
 	if r.before != nil {
 		for _, fb := range r.before.File {
 			r.count("before-files")
@@ -421,7 +422,7 @@ func (r *Reporter) Compare(out io.Writer) {
 				r.count("before-files-ignored")
 				continue
 			}
-			fa := r.getFile(fb.Path, r.after.File)
+			fa := walkedAfter[fb.Path]
 			if fa == nil {
 				r.count("before-files-removed")
 				output[actionDelete] = append(output[actionDelete], actionData{before: fb})
@@ -445,7 +446,6 @@ func (r *Reporter) Compare(out io.Writer) {
 					diff:   diff,
 				})
 			}
-			walked[fb.Path] = true
 		}
 	}
 	for _, fa := range r.after.File {
@@ -454,7 +454,7 @@ func (r *Reporter) Compare(out io.Writer) {
 			r.count("after-files-ignored")
 			continue
 		}
-		_, ok := walked[fa.Path]
+		_, ok := walkedBefore[fa.Path]
 		if ok {
 			continue
 		}
