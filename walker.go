@@ -91,6 +91,8 @@ type Walker struct {
 
 // convert creates a File from the given information and if requested embeds the hash sum too.
 func (w *Walker) convert(path string, info os.FileInfo) *fspb.File {
+	path = filepath.Clean(path)
+
 	f := &fspb.File{
 		Version: fileVersion,
 		Path:    path,
@@ -180,7 +182,7 @@ func (w *Walker) isExcluded(path string) bool {
 func (w *Walker) process(ctx context.Context, f *fspb.File) error {
 	// Print a short overview if we're running in verbose mode.
 	if w.Verbose {
-		fmt.Println(f.Path)
+		fmt.Println(NormalizePath(f.Path, f.Info.IsDir))
 		ts, _ := ptypes.Timestamp(f.Info.Modified) // ignoring error in ts conversion
 		info := []string{
 			fmt.Sprintf("size(%d)", f.Info.Size),
@@ -254,6 +256,7 @@ func (w *Walker) worker(ctx context.Context, chPaths <-chan string) error {
 		}
 
 		if err := filepath.Walk(path, func(p string, info os.FileInfo, err error) error {
+			p = NormalizePath(p, info.IsDir())
 			if err != nil {
 				msg := fmt.Sprintf("failed to walk %q: %s", p, err)
 				log.Printf(msg)
