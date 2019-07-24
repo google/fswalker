@@ -60,6 +60,33 @@ func TestWalkFilename(t *testing.T) {
 	}
 }
 
+func TestNormalizePath(t *testing.T) {
+	tests := []struct {
+		// arguments
+		path  string
+		isDir bool
+		// expected return value
+		ret string
+	}{
+		{"/a/b", true, "/a/b/"},
+		{"/a/b/", true, "/a/b/"},
+		{"/a/b//", true, "/a/b/"},
+		{"/a/b", false, "/a/b"},
+		{"/a/b/", false, "/a/b"},
+		{"/a/b//", false, "/a/b"},
+		{"/", false, "/"},
+		{"/", true, "/"},
+	}
+	for _, x := range tests {
+		p := filepath.FromSlash(x.path)
+		expected := filepath.FromSlash(x.ret)
+		got := NormalizePath(p, x.isDir)
+		if got != expected {
+			t.Errorf("NormalizePath(%q, %v) = %q; want: %q", p, x.isDir, got, expected)
+		}
+	}
+}
+
 func TestSha256sum(t *testing.T) {
 	gotHash, err := sha256sum(filepath.Join(testdataDir, "hashSumTest"))
 	if err != nil {

@@ -407,48 +407,50 @@ func (r *Reporter) Compare(out io.Writer) {
 	walkedAfter := map[string]*fspb.File{}
 
 	if r.before != nil {
-		for _, fb := range r.before.File {
-			walkedBefore[fb.Path] = fb
+		for _, fbOrig := range r.before.File {
+			fb := *fbOrig
+			fb.Path = NormalizePath(fb.Path, fb.Info.IsDir)
+			walkedBefore[fb.Path] = &fb
 		}
 	}
-	for _, fa := range r.after.File {
-		walkedAfter[fa.Path] = fa
+	for _, faOrig := range r.after.File {
+		fa := *faOrig
+		fa.Path = NormalizePath(fa.Path, fa.Info.IsDir)
+		walkedAfter[fa.Path] = &fa
 	}
 
-	if r.before != nil {
-		for _, fb := range r.before.File {
-			r.count("before-files")
-			if r.isIgnored(fb.Path) {
-				r.count("before-files-ignored")
-				continue
-			}
-			fa := walkedAfter[fb.Path]
-			if fa == nil {
-				r.count("before-files-removed")
-				output[actionDelete] = append(output[actionDelete], actionData{before: fb})
-				continue
-			}
-			diff, err := r.diffFile(fb, fa)
-			if err != nil {
-				r.count("file-diff-error")
-				output[actionError] = append(output[actionError], actionData{
-					before: fb,
-					after:  fa,
-					diff:   diff,
-					err:    err,
-				})
-			}
-			if diff != "" {
-				r.count("before-files-modified")
-				output[actionModify] = append(output[actionModify], actionData{
-					before: fb,
-					after:  fa,
-					diff:   diff,
-				})
-			}
+	for _, fb := range walkedBefore {
+		r.count("before-files")
+		if r.isIgnored(fb.Path) {
+			r.count("before-files-ignored")
+			continue
+		}
+		fa := walkedAfter[fb.Path]
+		if fa == nil {
+			r.count("before-files-removed")
+			output[actionDelete] = append(output[actionDelete], actionData{before: fb})
+			continue
+		}
+		diff, err := r.diffFile(fb, fa)
+		if err != nil {
+			r.count("file-diff-error")
+			output[actionError] = append(output[actionError], actionData{
+				before: fb,
+				after:  fa,
+				diff:   diff,
+				err:    err,
+			})
+		}
+		if diff != "" {
+			r.count("before-files-modified")
+			output[actionModify] = append(output[actionModify], actionData{
+				before: fb,
+				after:  fa,
+				diff:   diff,
+			})
 		}
 	}
-	for _, fa := range r.after.File {
+	for _, fa := range walkedAfter {
 		r.count("after-files")
 		if r.isIgnored(fa.Path) {
 			r.count("after-files-ignored")

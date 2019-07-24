@@ -53,6 +53,16 @@ func WalkFilename(hostname string, t time.Time) string {
 	return fmt.Sprintf("%s-%s-fswalker-state.pb", hn, ts)
 }
 
+// NormalizePath returns a cleaned up path with a path separator at the end if it's a directory.
+// It should always be used when printing or comparing paths.
+func NormalizePath(path string, isDir bool) string {
+	p := filepath.Clean(path)
+	if isDir && p[len(p)-1] != filepath.Separator {
+		p += string(filepath.Separator)
+	}
+	return p
+}
+
 // sha256sum reads the given file path and builds a SHA-256 sum over its content.
 func sha256sum(path string) (string, error) {
 	f, err := os.Open(path)
