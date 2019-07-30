@@ -189,17 +189,17 @@ func TestReadWalk(t *testing.T) {
 	wantFp := fmt.Sprintf("%x", h.Sum(nil))
 
 	r := &Reporter{}
-	gotWalk, fp, err := r.readWalk(ctx, tmpfile.Name())
+	got, err := r.ReadWalk(ctx, tmpfile.Name())
 	if err != nil {
 		t.Fatalf("readwalk(): %v", err)
 	}
-	if fp.Method != fspb.Fingerprint_SHA256 {
-		t.Errorf("readwalk(): fingerprint method, got=%v, want=SHA256", fp.Method)
+	if got.Fingerprint.Method != fspb.Fingerprint_SHA256 {
+		t.Errorf("readwalk(): fingerprint method, got=%v, want=SHA256", got.Fingerprint.Method)
 	}
-	if fp.Value != wantFp {
-		t.Errorf("readwalk(): fingerprint value, got=%s, want=%s", fp.Value, wantFp)
+	if got.Fingerprint.Value != wantFp {
+		t.Errorf("readwalk(): fingerprint value, got=%s, want=%s", got.Fingerprint.Value, wantFp)
 	}
-	diff := cmp.Diff(gotWalk, wantWalk, cmp.FilterPath(func(p cmp.Path) bool {
+	diff := cmp.Diff(got.Walk, wantWalk, cmp.FilterPath(func(p cmp.Path) bool {
 		return strings.Contains(p.String(), "XXX_")
 	}, cmp.Ignore()))
 	if diff != "" {
@@ -451,6 +451,37 @@ func TestDiffFile(t *testing.T) {
 				},
 			},
 			wantErr: true,
+		}, {
+			desc: "no fingerprint after",
+			before: &fspb.File{
+				Path:        "/tmp/testfile",
+				Fingerprint: []*fspb.Fingerprint{&fspb.Fingerprint{Value: "abcd"}},
+			},
+			after: &fspb.File{
+				Path: "/tmp/testfile",
+			},
+			wantDiff: "fingerprint: abcd => ",
+		}, {
+			desc: "diff fingerprints",
+			before: &fspb.File{
+				Path:        "/tmp/testfile",
+				Fingerprint: []*fspb.Fingerprint{&fspb.Fingerprint{Value: "abcd"}},
+			},
+			after: &fspb.File{
+				Path:        "/tmp/testfile",
+				Fingerprint: []*fspb.Fingerprint{&fspb.Fingerprint{Value: "efgh"}},
+			},
+			wantDiff: "fingerprint: abcd => efgh",
+		}, {
+			desc: "fingerprint only after",
+			before: &fspb.File{
+				Path: "/tmp/testfile",
+			},
+			after: &fspb.File{
+				Path:        "/tmp/testfile",
+				Fingerprint: []*fspb.Fingerprint{&fspb.Fingerprint{Value: "abcd"}},
+			},
+			wantDiff: "",
 		},
 	}
 
@@ -465,7 +496,116 @@ func TestDiffFile(t *testing.T) {
 				t.Errorf("diffFile() error: %v", err)
 			default:
 				if gotDiff != tc.wantDiff {
-					t.Errorf("diffFile() diff: got=%s, want=%s", gotDiff, tc.wantDiff)
+					t.Errorf("diffFile() diff: got=%q, want=%q", gotDiff, tc.wantDiff)
+				}
+			}
+		})
+	}
+}
+
+func TestCompare(t *testing.T) {
+	testCases := []struct {
+		desc      string
+		before    *fspb.Walk
+		after     *fspb.Walk
+		deleted   int
+		added     int
+		modified  int
+		wantError bool
+	}{
+		{
+			desc:   "nil before",
+			before: nil,
+			after: &fspb.Walk{
+				File: []*fspb.File{
+					&fspb.File{Path: "/a/b/c", Info: &fspb.FileInfo{}},
+				},
+			},
+			added: 1,
+		}, {
+			desc: "empty after",
+			before: &fspb.Walk{
+				Id: "1",
+				File: []*fspb.File{
+					&fspb.File{Path: "/a/b/c", Info: &fspb.FileInfo{}},
+				},
+			},
+			after:   &fspb.Walk{Id: "2"},
+			deleted: 1,
+		}, {
+			desc:      "nil before and after",
+			before:    nil,
+			after:     nil,
+			wantError: true,
+		}, {
+			desc: "diffs",
+			before: &fspb.Walk{
+				Id: "1",
+				File: []*fspb.File{
+					&fspb.File{Path: "/a/b/c", Info: &fspb.FileInfo{}},
+					&fspb.File{Path: "/e/f/g", Info: &fspb.FileInfo{Size: 4}},
+					&fspb.File{Path: "/x/y/z", Info: &fspb.FileInfo{}},
+				},
+			},
+			after: &fspb.Walk{
+				Id: "2",
+				File: []*fspb.File{
+					&fspb.File{Path: "/b/c/d", Info: &fspb.FileInfo{}},
+					&fspb.File{Path: "/e/f/g", Info: &fspb.FileInfo{Size: 7}},
+					&fspb.File{Path: "/x/y/z", Info: &fspb.FileInfo{}},
+				},
+			},
+			added:    1,
+			deleted:  1,
+			modified: 1,
+		}, {
+			desc: "ignore",
+			before: &fspb.Walk{
+				Id: "1",
+				File: []*fspb.File{
+					&fspb.File{Path: "/ignore/a", Info: &fspb.FileInfo{}},
+				},
+			},
+			after: &fspb.Walk{
+				Id: "2",
+				File: []*fspb.File{
+					&fspb.File{Path: "/ignore/b", Info: &fspb.FileInfo{}},
+				},
+			},
+		}, {
+			desc: "same dir with and without trailing /",
+			before: &fspb.Walk{
+				Id: "1",
+				File: []*fspb.File{
+					&fspb.File{Path: "/a/b/c/", Info: &fspb.FileInfo{IsDir: true}},
+				},
+			},
+			after: &fspb.Walk{
+				Id: "2",
+				File: []*fspb.File{
+					&fspb.File{Path: "/a/b/c", Info: &fspb.FileInfo{IsDir: true}},
+				},
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			r := &Reporter{config: &fspb.ReportConfig{ExcludePfx: []string{"/ignore/"}}}
+			report, err := r.Compare(tc.before, tc.after)
+			switch {
+			case tc.wantError && err == nil:
+				t.Error("Compare() no error")
+			case !tc.wantError && err != nil:
+				t.Errorf("Compare() error: %v", err)
+			case err == nil:
+				if n := len(report.Added); n != tc.added {
+					t.Errorf("len(report.Added) = %d; want %d", n, tc.added)
+				}
+				if n := len(report.Deleted); n != tc.deleted {
+					t.Errorf("len(report.Deleted) = %d; want %d", n, tc.deleted)
+				}
+				if n := len(report.Modified); n != tc.modified {
+					t.Errorf("len(report.Modified) = %d; want %d", n, tc.modified)
 				}
 			}
 		})
