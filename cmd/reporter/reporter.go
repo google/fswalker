@@ -29,21 +29,22 @@ import (
 )
 
 var (
-	configFile = flag.String("config-file", "", "required report config file to use")
-	walkPath   = flag.String("walk-path", "", "path to search for Walks")
-	reviewFile = flag.String("review-file", "", "path to the file containing a list of last-known-good states - this needs to be writeable")
-	hostname   = flag.String("hostname", "", "host to review the differences for")
-	beforeFile = flag.String("before-file", "", "path to the file to compare against (last known good typically)")
-	afterFile  = flag.String("after-file", "", "path to the file to compare with the before state")
-	paginate   = flag.Bool("paginate", false, "pipe output into $PAGER in order to paginate and make reviews easier")
-	verbose    = flag.Bool("verbose", false, "print additional output for each file which changed")
+	configFile   = flag.String("config-file", "", "required report config file to use")
+	walkPath     = flag.String("walk-path", "", "path to search for Walks")
+	reviewFile   = flag.String("review-file", "", "path to the file containing a list of last-known-good states - this needs to be writeable")
+	hostname     = flag.String("hostname", "", "host to review the differences for")
+	beforeFile   = flag.String("before-file", "", "path to the file to compare against (last known good typically)")
+	afterFile    = flag.String("after-file", "", "path to the file to compare with the before state")
+	paginate     = flag.Bool("paginate", false, "pipe output into $PAGER in order to paginate and make reviews easier")
+	verbose      = flag.Bool("verbose", false, "print additional output for each file which changed")
+	updateReview = flag.Bool("update-review", false, "ask to update the \"last known good\" review")
 )
 
 const (
 	lessCmd = "/usr/bin/less"
 )
 
-func updateReviews() bool {
+func askUpdateReviews() bool {
 	fmt.Print("Do you want to update the \"last known good\" to this [y/N]: ")
 	var input string
 	fmt.Scanln(&input)
@@ -152,7 +153,7 @@ func main() {
 	}
 
 	// Update reviews file if desired.
-	if updateReviews() {
+	if *updateReview && askUpdateReviews() {
 		if err := rptr.UpdateReviewProto(ctx, after, *reviewFile); err != nil {
 			log.Fatal(err)
 		}
