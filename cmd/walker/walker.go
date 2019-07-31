@@ -31,10 +31,9 @@ import (
 )
 
 var (
-	maxHashFileSize = flag.Int64("maxHashFileSize", 1024*1024, "max size of a file in bytes up to which a hash is generated")
-	policyFile      = flag.String("policyFile", "", "required policy file to use")
-	outputFilePfx   = flag.String("outputFilePfx", "", "path prefix for the output file to write (when a path is set)")
-	verbose         = flag.Bool("verbose", false, "when set to true, prints all discovered files including a metadata summary")
+	policyFile    = flag.String("policy-file", "", "required policy file to use")
+	outputFilePfx = flag.String("output-file-pfx", "", "path prefix for the output file to write (when a path is set)")
+	verbose       = flag.Bool("verbose", false, "when set to true, prints all discovered files including a metadata summary")
 )
 
 func walkCallback(ctx context.Context, walk *fspb.Walk) error {
@@ -65,7 +64,7 @@ func main() {
 	flag.Parse()
 
 	if *policyFile == "" {
-		log.Fatal("policyFile needs to be specified")
+		log.Fatal("policy-file needs to be specified")
 	}
 
 	w, err := fswalker.WalkerFromPolicyFile(ctx, *policyFile)
