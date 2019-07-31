@@ -53,6 +53,33 @@ func updateReviews() bool {
 	return false
 }
 
+func walksByLatest(ctx context.Context, r *fswalker.Reporter, hostname, reviewFile, walkPath string) (*fswalker.WalkFile, *fswalker.WalkFile, error) {
+	before, err := r.ReadLastGoodWalk(ctx, hostname, reviewFile)
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to load last good walk for %s: %v", hostname, err)
+	}
+	after, err := r.ReadLatestWalk(ctx, hostname, walkPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to load latest walk for %s: %v", hostname, err)
+	}
+	return before, after, nil
+}
+
+func walksByFiles(ctx context.Context, r *fswalker.Reporter, beforeFile, afterFile string) (*fswalker.WalkFile, *fswalker.WalkFile, error) {
+	after, err := r.ReadWalk(ctx, afterFile)
+	if err != nil {
+		return nil, nil, fmt.Errorf("File cannot be read: %s", afterFile)
+	}
+	var before *fswalker.WalkFile
+	if beforeFile != "" {
+		before, err = r.ReadWalk(ctx, beforeFile)
+		if err != nil {
+			return nil, nil, fmt.Errorf("File cannot be read: %s", beforeFile)
+		}
+	}
+	return before, after, nil
+}
+
 func main() {
 	ctx := context.Background()
 	flag.Parse()
@@ -65,8 +92,21 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := rptr.LoadWalks(ctx, *hostname, *reviewFile, *walkPath, *afterFile, *beforeFile); err != nil {
-		log.Fatal(err)
+
+	var before, after *fswalker.WalkFile
+	var errWalks error
+	if *hostname != "" && *reviewFile != "" && *walkPath != "" {
+		if *afterFile != "" || *beforeFile != "" {
+			log.Fatalf("[hostname reviewFile walkPath] and [[beforeFile] afterFile] are mutually exclusive")
+		}
+		before, after, errWalks = walksByLatest(ctx, rptr, *hostname, *reviewFile, *walkPath)
+	} else if *afterFile != "" {
+		before, after, errWalks = walksByFiles(ctx, rptr, *beforeFile, *afterFile)
+	} else {
+		log.Fatalf("either [hostname reviewFile walkPath] OR [[beforeFile] afterFile] need to be specified")
+	}
+	if errWalks != nil {
+		log.Fatal(errWalks)
 	}
 
 	// Processing and output.
@@ -88,12 +128,23 @@ func main() {
 			log.Fatal(err)
 		}
 		if err := cmd.Start(); err != nil {
-			log.Fatal(fmt.Errorf("unable to start %q: %v", lessCmd, err))
+			log.Fatalf("unable to start %q: %v", lessCmd, err)
 		}
 	}
-	rptr.PrintReportSummary(out)
-	rptr.PrintRuleSummary(out)
-	rptr.Compare(out)
+	var report *fswalker.Report
+	var errReport error
+	if before == nil {
+		fmt.Println("No before walk found. Using after walk only.")
+		report, errReport = rptr.Compare(nil, after.Walk)
+	} else {
+		report, errReport = rptr.Compare(before.Walk, after.Walk)
+	}
+	if errReport != nil {
+		log.Fatal(errReport)
+	}
+	rptr.PrintReportSummary(out, report)
+	rptr.PrintRuleSummary(out, report)
+	rptr.PrintDiffSummary(out, report)
 
 	if *paginate {
 		out.Close()
@@ -102,7 +153,7 @@ func main() {
 
 	// Update reviews file if desired.
 	if updateReviews() {
-		if err := rptr.UpdateReviewProto(ctx); err != nil {
+		if err := rptr.UpdateReviewProto(ctx, after, *reviewFile); err != nil {
 			log.Fatal(err)
 		}
 	} else {
@@ -111,8 +162,8 @@ func main() {
 
 	fmt.Println()
 	fmt.Println("Metrics:")
-	for _, k := range rptr.Counter.Metrics() {
-		v, _ := rptr.Counter.Get(k)
+	for _, k := range report.Counter.Metrics() {
+		v, _ := report.Counter.Get(k)
 		fmt.Printf("[%-30s] = %6d\n", k, v)
 	}
 }

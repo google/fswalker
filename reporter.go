@@ -37,21 +37,33 @@ import (
 )
 
 const (
-	actionAdd    = action("Added")
-	actionModify = action("Modified")
-	actionDelete = action("Deleted")
-	actionError  = action("Error")
-
 	timeReportFormat = "2006-01-02 15:04:05 MST"
 )
 
-type action string
+// WalkFile contains info about a Walk file.
+type WalkFile struct {
+	Path        string
+	Walk        *fspb.Walk
+	Fingerprint *fspb.Fingerprint
+}
 
-type actionData struct {
-	before *fspb.File
-	after  *fspb.File
-	diff   string
-	err    error
+// Report contains the result of the comparison between two Walks.
+type Report struct {
+	Added      []ActionData
+	Deleted    []ActionData
+	Modified   []ActionData
+	Errors     []ActionData
+	Counter    *metrics.Counter
+	WalkBefore *fspb.Walk
+	WalkAfter  *fspb.Walk
+}
+
+// ActionData contains a diff between two files in different Walks.
+type ActionData struct {
+	Before *fspb.File
+	After  *fspb.File
+	Diff   string
+	Err    error
 }
 
 // ReporterFromConfigFile creates a new Reporter based on a config path.
@@ -64,7 +76,6 @@ func ReporterFromConfigFile(ctx context.Context, path string, verbose bool) (*Re
 		config:     config,
 		configPath: path,
 		Verbose:    verbose,
-		Counter:    &metrics.Counter{},
 	}, nil
 }
 
@@ -77,19 +88,6 @@ type Reporter struct {
 
 	// Verbose, when true, makes Reporter print more information for all diffs found.
 	Verbose bool
-
-	// Counter records stats over all processed files, if non-nil.
-	Counter *metrics.Counter
-
-	reviewFile string
-	reviews    *fspb.Reviews
-
-	beforeFile string
-	before     *fspb.Walk
-	beforeFp   *fspb.Fingerprint
-	afterFile  string
-	after      *fspb.Walk
-	afterFp    *fspb.Fingerprint
 }
 
 func (r *Reporter) verifyFingerprint(goodFp *fspb.Fingerprint, checkFp *fspb.Fingerprint) error {
@@ -116,119 +114,62 @@ func (r *Reporter) fingerprint(b []byte) *fspb.Fingerprint {
 	}
 }
 
-// readWalk reads a file as marshaled proto in fspb.Walk format.
-func (r *Reporter) readWalk(ctx context.Context, path string) (*fspb.Walk, *fspb.Fingerprint, error) {
+// ReadWalk reads a file as marshaled proto in fspb.Walk format.
+func (r *Reporter) ReadWalk(ctx context.Context, path string) (*WalkFile, error) {
 	b, err := ReadFile(ctx, path)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	p := &fspb.Walk{}
 	if err := proto.Unmarshal(b, p); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	fp := r.fingerprint(b)
-	fmt.Printf("Loaded file %q with fingerprint: %s(%s)\n", path, fp.Method, fp.Value)
-	return p, fp, nil
+	if r.Verbose {
+		fmt.Printf("Loaded file %q with fingerprint: %s(%s)\n", path, fp.Method, fp.Value)
+	}
+	return &WalkFile{Path: path, Walk: p, Fingerprint: fp}, nil
 }
 
-// loadLatestWalk looks for the latest Walk in a given folder for a given hostname.
+// ReadLatestWalk looks for the latest Walk in a given folder for a given hostname.
 // It returns the file path it ended up reading, the Walk it read and the fingerprint for it.
-func (r *Reporter) loadLatestWalk(ctx context.Context, hostname, walkPath string) (string, *fspb.Walk, *fspb.Fingerprint, error) {
+func (r *Reporter) ReadLatestWalk(ctx context.Context, hostname, walkPath string) (*WalkFile, error) {
 	matchpath := path.Join(walkPath, WalkFilename(hostname, time.Time{}))
 	names, err := Glob(ctx, matchpath)
 	if err != nil {
-		return "", nil, nil, err
+		return nil, err
 	}
 	if len(names) == 0 {
-		return "", nil, nil, fmt.Errorf("no files found for %q", matchpath)
+		return nil, fmt.Errorf("no files found for %q", matchpath)
 	}
 	sort.Strings(names) // the assumption is that the file names are such that the latest is last.
-	wlk, fp, err := r.readWalk(ctx, names[len(names)-1])
-	return names[len(names)-1], wlk, fp, err
+	return r.ReadWalk(ctx, names[len(names)-1])
 }
 
-// loadLastGoodWalk reads the designated review file and attempts to find an entry matching
+// ReadLastGoodWalk reads the designated review file and attempts to find an entry matching
 // the given hostname. Note that if it can't find one but the review file itself was read
 // successfully, it will return an empty Walk and no error.
 // It returns the file path it ended up reading, the Walk it read and the fingerprint for it.
-func (r *Reporter) loadLastGoodWalk(ctx context.Context, hostname, reviewFile string) (string, *fspb.Walk, *fspb.Fingerprint, error) {
-	r.reviews = &fspb.Reviews{}
-	if err := readTextProto(ctx, reviewFile, r.reviews); err != nil {
-		return "", nil, nil, err
+func (r *Reporter) ReadLastGoodWalk(ctx context.Context, hostname, reviewFile string) (*WalkFile, error) {
+	reviews := &fspb.Reviews{}
+	if err := readTextProto(ctx, reviewFile, reviews); err != nil {
+		return nil, err
 	}
-	rvws, ok := r.reviews.Review[hostname]
+	rvws, ok := reviews.Review[hostname]
 	if !ok {
-		return "", nil, nil, nil
+		return nil, nil
 	}
-	good, fp, err := r.readWalk(ctx, rvws.WalkReference)
+	wf, err := r.ReadWalk(ctx, rvws.WalkReference)
 	if err != nil {
-		return "", nil, nil, err
+		return wf, err
 	}
-	if err := r.verifyFingerprint(rvws.Fingerprint, fp); err != nil {
-		return "", nil, nil, err
+	if err := r.verifyFingerprint(rvws.Fingerprint, wf.Fingerprint); err != nil {
+		return wf, err
 	}
-	if good.Id != rvws.WalkId {
-		return "", nil, fp, fmt.Errorf("walk ID doesn't match: %s (from %s) != %s (from %s)", good.Id, rvws.WalkReference, rvws.WalkId, reviewFile)
+	if wf.Walk.Id != rvws.WalkId {
+		return wf, fmt.Errorf("walk ID doesn't match: %s (from %s) != %s (from %s)", wf.Walk.Id, rvws.WalkReference, rvws.WalkId, reviewFile)
 	}
-	return rvws.WalkReference, good, fp, nil
-}
-
-// LoadWalks accepts a number of parameters on which it decides how to load the walks to compare.
-// Note that the "before" walk (i.e. last known good) may be legitimately empty.
-func (r *Reporter) LoadWalks(ctx context.Context, hostname, reviewFile, walkPath, afterFile, beforeFile string) error {
-	var err error
-	var before, after *fspb.Walk
-	var beforeFp, afterFp *fspb.Fingerprint
-	if hostname != "" && reviewFile != "" && walkPath != "" {
-		if afterFile != "" || beforeFile != "" {
-			return fmt.Errorf("[hostname reviewFile walkPath] and [beforeFile afterFile] are mutually exclusive")
-		}
-
-		beforeFile, before, beforeFp, err = r.loadLastGoodWalk(ctx, hostname, reviewFile)
-		if err != nil {
-			return fmt.Errorf("unable to load last good walk for %s: %v", hostname, err)
-		}
-		afterFile, after, afterFp, err = r.loadLatestWalk(ctx, hostname, walkPath)
-		if err != nil {
-			return fmt.Errorf("unable to load latest walk for %s: %v", hostname, err)
-		}
-		if err := r.sanityCheck(before, after); err != nil {
-			return err
-		}
-		r.reviewFile = reviewFile
-		r.before = before
-		r.beforeFp = beforeFp
-		r.beforeFile = beforeFile
-		r.after = after
-		r.afterFp = afterFp
-		r.afterFile = afterFile
-		return nil
-	}
-
-	if afterFile != "" {
-		after, afterFp, err = r.readWalk(ctx, afterFile)
-		if err != nil {
-			return fmt.Errorf("File cannot be read: %s", afterFile)
-		}
-		if beforeFile != "" {
-			before, beforeFp, err = r.readWalk(ctx, beforeFile)
-			if err != nil {
-				return fmt.Errorf("File cannot be read: %s", beforeFile)
-			}
-		}
-		if err := r.sanityCheck(before, after); err != nil {
-			return err
-		}
-		r.before = before
-		r.beforeFp = beforeFp
-		r.beforeFile = beforeFile
-		r.after = after
-		r.afterFp = afterFp
-		r.afterFile = afterFile
-		return nil
-	}
-
-	return fmt.Errorf("either [hostname reviewFile walkPath] OR [[beforeFile] afterFile] need to be specified")
+	return wf, nil
 }
 
 // sanityCheck runs a few checks to ensure the "before" and "after" Walks are sane-ish.
@@ -374,8 +315,17 @@ func (r *Reporter) diffFile(before, after *fspb.File) (string, error) {
 	var diffs []string
 	// Ensure fingerprints are the same - if there was one before. Do not show a diff if there's a new fingerprint.
 	if len(before.Fingerprint) > 0 {
-		if diff := cmp.Diff(before.Fingerprint, after.Fingerprint); diff != "" {
-			diffs = append(diffs, diff)
+		fb := before.Fingerprint[0]
+		if len(after.Fingerprint) == 0 {
+			diffs = append(diffs, fmt.Sprintf("fingerprint: %s => ", fb.Value))
+		} else {
+			fa := after.Fingerprint[0]
+			if fb.Method != fa.Method {
+				diffs = append(diffs, fmt.Sprintf("fingerprint-method: %s => %s", fb.Method, fa.Method))
+			}
+			if fb.Value != fa.Value {
+				diffs = append(diffs, fmt.Sprintf("fingerprint: %s => %s", fb.Value, fa.Value))
+			}
 		}
 	}
 	fiDiffs, err := r.diffFileInfo(before.Info, after.Info)
@@ -392,126 +342,131 @@ func (r *Reporter) diffFile(before, after *fspb.File) (string, error) {
 	return strings.Join(diffs, "\n"), nil
 }
 
-func (r *Reporter) count(metric string) {
-	if r.Counter == nil {
-		return
+// Compare two Walks and returns the diffs.
+func (r *Reporter) Compare(before, after *fspb.Walk) (*Report, error) {
+	if err := r.sanityCheck(before, after); err != nil {
+		return nil, err
 	}
-	r.Counter.Add(1, metric)
-}
 
-// Compare runs through two Walks (before and after) with a given ReportConfig and shows the diffs.
-func (r *Reporter) Compare(out io.Writer) {
-	// Processing report.
-	output := map[action][]actionData{}
 	walkedBefore := map[string]*fspb.File{}
 	walkedAfter := map[string]*fspb.File{}
-
-	if r.before != nil {
-		for _, fbOrig := range r.before.File {
+	if before != nil {
+		for _, fbOrig := range before.File {
 			fb := *fbOrig
 			fb.Path = NormalizePath(fb.Path, fb.Info.IsDir)
 			walkedBefore[fb.Path] = &fb
 		}
 	}
-	for _, faOrig := range r.after.File {
+	for _, faOrig := range after.File {
 		fa := *faOrig
 		fa.Path = NormalizePath(fa.Path, fa.Info.IsDir)
 		walkedAfter[fa.Path] = &fa
 	}
 
+	counter := metrics.Counter{}
+	output := Report{
+		Counter:    &counter,
+		WalkBefore: before,
+		WalkAfter:  after,
+	}
+
 	for _, fb := range walkedBefore {
-		r.count("before-files")
+		counter.Add(1, "before-files")
 		if r.isIgnored(fb.Path) {
-			r.count("before-files-ignored")
+			counter.Add(1, "before-files-ignored")
 			continue
 		}
 		fa := walkedAfter[fb.Path]
 		if fa == nil {
-			r.count("before-files-removed")
-			output[actionDelete] = append(output[actionDelete], actionData{before: fb})
+			counter.Add(1, "before-files-removed")
+			output.Deleted = append(output.Deleted, ActionData{Before: fb})
 			continue
 		}
 		diff, err := r.diffFile(fb, fa)
 		if err != nil {
-			r.count("file-diff-error")
-			output[actionError] = append(output[actionError], actionData{
-				before: fb,
-				after:  fa,
-				diff:   diff,
-				err:    err,
+			counter.Add(1, "file-diff-error")
+			output.Errors = append(output.Errors, ActionData{
+				Before: fb,
+				After:  fa,
+				Diff:   diff,
+				Err:    err,
 			})
 		}
 		if diff != "" {
-			r.count("before-files-modified")
-			output[actionModify] = append(output[actionModify], actionData{
-				before: fb,
-				after:  fa,
-				diff:   diff,
+			counter.Add(1, "before-files-modified")
+			output.Modified = append(output.Modified, ActionData{
+				Before: fb,
+				After:  fa,
+				Diff:   diff,
 			})
 		}
 	}
 	for _, fa := range walkedAfter {
-		r.count("after-files")
+		counter.Add(1, "after-files")
 		if r.isIgnored(fa.Path) {
-			r.count("after-files-ignored")
+			counter.Add(1, "after-files-ignored")
 			continue
 		}
 		_, ok := walkedBefore[fa.Path]
 		if ok {
 			continue
 		}
-		r.count("after-files-created")
-		output[actionAdd] = append(output[actionAdd], actionData{after: fa})
+		counter.Add(1, "after-files-created")
+		output.Added = append(output.Added, ActionData{After: fa})
 	}
+	return &output, nil
+}
 
-	// Writing sorted output.
+// PrintDiffSummary prints the diffs found in a Report.
+func (r *Reporter) PrintDiffSummary(out io.Writer, report *Report) {
 	fmt.Fprintln(out, "===============================================================================")
 	fmt.Fprintln(out, "Object Summary:")
 	fmt.Fprintln(out, "===============================================================================")
-	if len(output[actionAdd]) > 0 {
-		fmt.Fprintf(out, "Added (%d):\n", len(output[actionAdd]))
-		for _, file := range output[actionAdd] {
-			fmt.Fprintln(out, file.after.Path)
+
+	if len(report.Added) > 0 {
+		fmt.Fprintf(out, "Added (%d):\n", len(report.Added))
+		for _, file := range report.Added {
+			fmt.Fprintln(out, file.After.Path)
 		}
 		fmt.Fprintln(out)
 	}
-	if len(output[actionDelete]) > 0 {
-		fmt.Fprintf(out, "Removed (%d):\n", len(output[actionDelete]))
-		for _, file := range output[actionDelete] {
-			fmt.Fprintln(out, file.before.Path)
+	if len(report.Deleted) > 0 {
+		fmt.Fprintf(out, "Removed (%d):\n", len(report.Deleted))
+		for _, file := range report.Deleted {
+			fmt.Fprintln(out, file.Before.Path)
 		}
 		fmt.Fprintln(out)
 	}
-	if len(output[actionModify]) > 0 {
-		fmt.Fprintf(out, "Modified (%d):\n", len(output[actionModify]))
-		for _, file := range output[actionModify] {
-			fmt.Fprintln(out, file.after.Path)
+	if len(report.Modified) > 0 {
+		fmt.Fprintf(out, "Modified (%d):\n", len(report.Modified))
+		for _, file := range report.Modified {
+			fmt.Fprintln(out, file.After.Path)
 			if r.Verbose {
-				fmt.Fprintln(out, file.diff)
+				fmt.Fprintln(out, file.Diff)
 				fmt.Fprintln(out)
 			}
 		}
 		fmt.Fprintln(out)
 	}
-	if len(output[actionError]) > 0 {
-		fmt.Fprintf(out, "Reporting Errors (%d):\n", len(output[actionError]))
-		for _, file := range output[actionError] {
-			fmt.Fprintf(out, "%s: %v\n", file.before.Path, file.err)
+	if len(report.Errors) > 0 {
+		fmt.Fprintf(out, "Reporting Errors (%d):\n", len(report.Errors))
+		for _, file := range report.Errors {
+			fmt.Fprintf(out, "%s: %v\n", file.Before.Path, file.Err)
 		}
 		fmt.Fprintln(out)
 	}
-	if r.before != nil && len(r.before.Notification) > 0 {
+	if report.WalkBefore != nil && len(report.WalkBefore.Notification) > 0 {
 		fmt.Fprintln(out, "Walking Errors for BEFORE file:")
-		for _, err := range r.before.Notification {
+		for _, err := range report.WalkBefore.Notification {
 			if r.Verbose || (err.Severity != fspb.Notification_UNKNOWN && err.Severity != fspb.Notification_INFO) {
 				fmt.Fprintf(out, "%s(%s): %s\n", err.Severity, err.Path, err.Message)
 			}
 		}
 		fmt.Fprintln(out)
 	}
-	if len(r.after.Notification) > 0 {
+	if len(report.WalkAfter.Notification) > 0 {
 		fmt.Fprintln(out, "Walking Errors for AFTER file:")
-		for _, err := range r.after.Notification {
+		for _, err := range report.WalkAfter.Notification {
 			if r.Verbose || (err.Severity != fspb.Notification_UNKNOWN && err.Severity != fspb.Notification_INFO) {
 				fmt.Fprintf(out, "%s(%s): %s\n", err.Severity, err.Path, err.Message)
 			}
@@ -520,88 +475,85 @@ func (r *Reporter) Compare(out io.Writer) {
 	}
 }
 
-// PrintReportSummary prints a few key information pieces around the Report.
-func (r *Reporter) PrintReportSummary(out io.Writer) {
-	fmt.Fprintln(out, "===============================================================================")
-	fmt.Fprintln(out, "Report Summary:")
-	fmt.Fprintln(out, "===============================================================================")
-	fmt.Fprintln(out)
-	fmt.Fprintf(out, "Host name: %s\n", r.after.Hostname)
-	fmt.Fprintf(out, "Report config used: %s\n", r.configPath)
-
-	if r.before != nil {
-		bwst, err := ptypes.Timestamp(r.before.StartWalk)
-		if err != nil {
-			log.Fatalf("unable to convert before walk start timestamp: %v", err)
-		}
-		bwet, err := ptypes.Timestamp(r.before.StopWalk)
-		if err != nil {
-			log.Fatalf("unable to convert before walk stop timestamp: %v", err)
-		}
-		fmt.Fprintln(out, "Walk (Before)")
-		fmt.Fprintf(out, "  - ID: %s\n", r.before.Id)
-		fmt.Fprintf(out, "  - Start Time: %s\n", bwst)
-		fmt.Fprintf(out, "  - Stop Time: %s\n", bwet)
-	}
-
-	awst, err := ptypes.Timestamp(r.after.StartWalk)
+// printWalkSummary prints some information about the given walk.
+func (r *Reporter) printWalkSummary(out io.Writer, walk *fspb.Walk) {
+	awst, err := ptypes.Timestamp(walk.StartWalk)
 	if err != nil {
 		log.Fatalf("unable to convert after walk start timestamp: %v", err)
 	}
-	awet, err := ptypes.Timestamp(r.after.StopWalk)
+	awet, err := ptypes.Timestamp(walk.StopWalk)
 	if err != nil {
 		log.Fatalf("unable to convert after walk stop timestamp: %v", err)
 	}
-	fmt.Fprintln(out, "Walk (After)")
-	fmt.Fprintf(out, "  - ID: %s\n", r.after.Id)
+	fmt.Fprintf(out, "  - ID: %s\n", walk.Id)
 	fmt.Fprintf(out, "  - Start Time: %s\n", awst)
 	fmt.Fprintf(out, "  - Stop Time: %s\n", awet)
+}
+
+// PrintReportSummary prints a few key information pieces around the Report.
+func (r *Reporter) PrintReportSummary(out io.Writer, report *Report) {
+	fmt.Fprintln(out, "===============================================================================")
+	fmt.Fprintln(out, "Report Summary:")
+	fmt.Fprintln(out, "===============================================================================")
+	fmt.Fprintf(out, "Host name: %s\n", report.WalkAfter.Hostname)
+	fmt.Fprintf(out, "Report config used: %s\n", r.configPath)
+	if report.WalkBefore != nil {
+		fmt.Fprintln(out, "Walk (Before)")
+		r.printWalkSummary(out, report.WalkBefore)
+	}
+	fmt.Fprintln(out, "Walk (After)")
+	r.printWalkSummary(out, report.WalkAfter)
 	fmt.Fprintln(out)
 }
 
 // PrintRuleSummary prints the configs and policies involved in creating the Walk and Report.
-func (r *Reporter) PrintRuleSummary(out io.Writer) {
+func (r *Reporter) PrintRuleSummary(out io.Writer, report *Report) {
 	fmt.Fprintln(out, "===============================================================================")
 	fmt.Fprintln(out, "Rule Summary:")
 	fmt.Fprintln(out, "===============================================================================")
-	fmt.Fprintln(out)
 	fmt.Fprintln(out, "Client Policy:")
-	if r.before == nil {
-		fmt.Fprintln(out, proto.MarshalTextString(r.after.Policy))
+	if report.WalkBefore == nil {
+		fmt.Fprintln(out, proto.MarshalTextString(report.WalkAfter.Policy))
 	} else {
-		diff := cmp.Diff(r.before.Policy, r.after.Policy)
+		diff := cmp.Diff(report.WalkBefore.Policy, report.WalkAfter.Policy)
 		if diff != "" {
 			fmt.Fprintln(out, "Diff:")
 			fmt.Fprintln(out, diff)
 			fmt.Fprintln(out, "Before:")
 		}
-		fmt.Fprintln(out, proto.MarshalTextString(r.before.Policy))
+		fmt.Fprintln(out, proto.MarshalTextString(report.WalkBefore.Policy))
 	}
 	fmt.Fprintln(out, "Report Config:")
 	fmt.Fprintln(out, proto.MarshalTextString(r.config))
 }
 
 // UpdateReviewProto updates the reviews file to the reviewed version to be "last known good".
-func (r *Reporter) UpdateReviewProto(ctx context.Context) error {
+func (r *Reporter) UpdateReviewProto(ctx context.Context, walkFile *WalkFile, reviewFile string) error {
 	review := &fspb.Review{
-		WalkId:        r.after.Id,
-		WalkReference: r.afterFile,
-		Fingerprint:   r.afterFp,
+		WalkId:        walkFile.Walk.Id,
+		WalkReference: walkFile.Path,
+		Fingerprint:   walkFile.Fingerprint,
 	}
 	blob := proto.MarshalTextString(&fspb.Reviews{
 		Review: map[string]*fspb.Review{
-			r.after.Hostname: review,
+			walkFile.Walk.Hostname: review,
 		},
 	})
 	fmt.Println("New review section:")
 	// replace message boundary characters as curly braces look nicer (both is fine to parse)
 	fmt.Println(strings.Replace(strings.Replace(blob, "<", "{", -1), ">", "}", -1))
-	if r.reviewFile != "" && r.reviews != nil {
-		r.reviews.Review[r.after.Hostname] = review
-		if err := writeTextProto(ctx, r.reviewFile, r.reviews); err != nil {
+
+	if reviewFile != "" {
+		reviews := &fspb.Reviews{}
+		if err := readTextProto(ctx, reviewFile, reviews); err != nil {
 			return err
 		}
-		fmt.Printf("Changes written to %q\n", r.reviewFile)
+
+		reviews.Review[walkFile.Walk.Hostname] = review
+		if err := writeTextProto(ctx, reviewFile, reviews); err != nil {
+			return err
+		}
+		fmt.Printf("Changes written to %q\n", reviewFile)
 	} else {
 		fmt.Println("No reviews file provided so you will have to update it manually.")
 	}
