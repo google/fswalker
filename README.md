@@ -145,8 +145,8 @@ walker:
 
 ```bash
 walker \
-  -policyFile=policy.textpb \
-  -outputFilePfx="/tmp"
+  -policy-file=policy.textpb \
+  -output-file-pfx="/tmp"
 ```
 
 Add `-verbose` to see more details about what's going on.
@@ -168,13 +168,13 @@ against each other:
 
 ```bash
 reporter \
-  -configFile=config.textpb \
-  -beforeFile=/tmp/some-host.google.com-20181205-060000-fswalker-state.pb \
-  -afterFile=/tmp/some-host.google.com-20181206-060000-fswalker-state.pb \
+  -config-file=config.textpb \
+  -before-file=/tmp/some-host.google.com-20181205-060000-fswalker-state.pb \
+  -after-file=/tmp/some-host.google.com-20181206-060000-fswalker-state.pb \
   -paginate
 ```
 
-Note that you can also run with just `-afterFile` specified which will basically
+Note that you can also run with just `-after-file` specified which will basically
 list all files as newly added. This is only really useful with a new machine.
 
 #### Review File Based
@@ -184,14 +184,14 @@ file:
 
 ```bash
 reporter \
-  -configFile=config.textpb \
-  -reviewFile=reviews.textpb \ # this needs to be writeable!
-  -walkPath=/tmp \
+  -config-file=config.textpb \
+  -review-file=reviews.textpb \ # this needs to be writeable!
+  -walk-path=/tmp \
   -hostname=some-host.google.com \
   -paginate
 ```
 
-The reporter runs, displays all diffs and when deemed ok, updates the reviewFile
+The reporter runs, displays all diffs and when deemed ok, updates the review file
 with the latest "known good" information.
 
 The idea is that the review file contains a set of "known good" states and is

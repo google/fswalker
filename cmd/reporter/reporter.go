@@ -29,12 +29,12 @@ import (
 )
 
 var (
-	configFile = flag.String("configFile", "", "required report config file to use")
-	walkPath   = flag.String("walkPath", "", "path to search for Walks")
-	reviewFile = flag.String("reviewFile", "", "path to the file containing a list of last-known-good states - this needs to be writeable")
+	configFile = flag.String("config-file", "", "required report config file to use")
+	walkPath   = flag.String("walk-path", "", "path to search for Walks")
+	reviewFile = flag.String("review-file", "", "path to the file containing a list of last-known-good states - this needs to be writeable")
 	hostname   = flag.String("hostname", "", "host to review the differences for")
-	beforeFile = flag.String("beforeFile", "", "path to the file to compare against (last known good typically)")
-	afterFile  = flag.String("afterFile", "", "path to the file to compare with the before state")
+	beforeFile = flag.String("before-file", "", "path to the file to compare against (last known good typically)")
+	afterFile  = flag.String("after-file", "", "path to the file to compare with the before state")
 	paginate   = flag.Bool("paginate", false, "pipe output into $PAGER in order to paginate and make reviews easier")
 	verbose    = flag.Bool("verbose", false, "print additional output for each file which changed")
 )
@@ -86,7 +86,7 @@ func main() {
 
 	// Loading configs and walks.
 	if *configFile == "" {
-		log.Fatal("configFile needs to be specified")
+		log.Fatal("config-file needs to be specified")
 	}
 	rptr, err := fswalker.ReporterFromConfigFile(ctx, *configFile, *verbose)
 	if err != nil {
@@ -97,13 +97,13 @@ func main() {
 	var errWalks error
 	if *hostname != "" && *reviewFile != "" && *walkPath != "" {
 		if *afterFile != "" || *beforeFile != "" {
-			log.Fatalf("[hostname reviewFile walkPath] and [[beforeFile] afterFile] are mutually exclusive")
+			log.Fatalf("[hostname review-file walk-path] and [[before-file] after-file] are mutually exclusive")
 		}
 		before, after, errWalks = walksByLatest(ctx, rptr, *hostname, *reviewFile, *walkPath)
 	} else if *afterFile != "" {
 		before, after, errWalks = walksByFiles(ctx, rptr, *beforeFile, *afterFile)
 	} else {
-		log.Fatalf("either [hostname reviewFile walkPath] OR [[beforeFile] afterFile] need to be specified")
+		log.Fatalf("either [hostname review-file walk-path] OR [[before-file] after-file] need to be specified")
 	}
 	if errWalks != nil {
 		log.Fatal(errWalks)
