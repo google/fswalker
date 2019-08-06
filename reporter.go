@@ -511,20 +511,24 @@ func (r *Reporter) PrintRuleSummary(out io.Writer, report *Report) {
 	fmt.Fprintln(out, "===============================================================================")
 	fmt.Fprintln(out, "Rule Summary:")
 	fmt.Fprintln(out, "===============================================================================")
-	fmt.Fprintln(out, "Client Policy:")
-	if report.WalkBefore == nil {
-		fmt.Fprintln(out, proto.MarshalTextString(report.WalkAfter.Policy))
-	} else {
+
+	if report.WalkBefore != nil {
 		diff := cmp.Diff(report.WalkBefore.Policy, report.WalkAfter.Policy)
 		if diff != "" {
-			fmt.Fprintln(out, "Diff:")
+			fmt.Fprintln(out, "Walks policy diff:")
 			fmt.Fprintln(out, diff)
-			fmt.Fprintln(out, "Before:")
 		}
-		fmt.Fprintln(out, proto.MarshalTextString(report.WalkBefore.Policy))
 	}
-	fmt.Fprintln(out, "Report Config:")
-	fmt.Fprintln(out, proto.MarshalTextString(r.config))
+	if r.Verbose {
+		fmt.Fprintln(out, "Client Policy:")
+		policy := report.WalkAfter.Policy
+		if report.WalkBefore != nil {
+			policy = report.WalkBefore.Policy
+		}
+		fmt.Fprintln(out, proto.MarshalTextString(policy))
+		fmt.Fprintln(out, "Report Config:")
+		fmt.Fprintln(out, proto.MarshalTextString(r.config))
+	}
 }
 
 // UpdateReviewProto updates the reviews file to the reviewed version to be "last known good".
