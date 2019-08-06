@@ -414,6 +414,18 @@ func (r *Reporter) Compare(before, after *fspb.Walk) (*Report, error) {
 		counter.Add(1, "after-files-created")
 		output.Added = append(output.Added, ActionData{After: fa})
 	}
+	sort.Slice(output.Added, func(i, j int) bool {
+		return output.Added[i].After.Path < output.Added[j].After.Path
+	})
+	sort.Slice(output.Deleted, func(i, j int) bool {
+		return output.Deleted[i].Before.Path < output.Deleted[j].Before.Path
+	})
+	sort.Slice(output.Modified, func(i, j int) bool {
+		return output.Modified[i].Before.Path < output.Modified[j].Before.Path
+	})
+	sort.Slice(output.Errors, func(i, j int) bool {
+		return output.Errors[i].Before.Path < output.Errors[j].Before.Path
+	})
 	return &output, nil
 }
 
