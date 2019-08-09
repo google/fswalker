@@ -58,7 +58,7 @@ type Report struct {
 	WalkAfter  *fspb.Walk
 }
 
-// Empty is true if there has no additions, no deletions, no modifications and no errors.
+// Empty returns true if there are no additions, no deletions, no modifications and no errors.
 func (r *Report) Empty() bool {
 	return len(r.Added)+len(r.Deleted)+len(r.Modified)+len(r.Errors) == 0
 }
