@@ -110,6 +110,17 @@ func main() {
 		log.Fatal(errWalks)
 	}
 
+	var report *fswalker.Report
+	var errReport error
+	if before == nil {
+		report, errReport = rptr.Compare(nil, after.Walk)
+	} else {
+		report, errReport = rptr.Compare(before.Walk, after.Walk)
+	}
+	if errReport != nil {
+		log.Fatal(errReport)
+	}
+
 	// Processing and output.
 	// Note that we do some trickery here to allow pagination via $PAGER if requested.
 	out := io.WriteCloser(os.Stdout)
@@ -132,16 +143,9 @@ func main() {
 			log.Fatalf("unable to start %q: %v", lessCmd, err)
 		}
 	}
-	var report *fswalker.Report
-	var errReport error
+
 	if before == nil {
 		fmt.Fprintln(out, "No before walk found. Using after walk only.")
-		report, errReport = rptr.Compare(nil, after.Walk)
-	} else {
-		report, errReport = rptr.Compare(before.Walk, after.Walk)
-	}
-	if errReport != nil {
-		log.Fatal(errReport)
 	}
 	rptr.PrintReportSummary(out, report)
 	rptr.PrintRuleSummary(out, report)
