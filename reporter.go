@@ -58,6 +58,11 @@ type Report struct {
 	WalkAfter  *fspb.Walk
 }
 
+// Empty returns true if there are no additions, no deletions, no modifications and no errors.
+func (r *Report) Empty() bool {
+	return len(r.Added)+len(r.Deleted)+len(r.Modified)+len(r.Errors) == 0
+}
+
 // ActionData contains a diff between two files in different Walks.
 type ActionData struct {
 	Before *fspb.File
@@ -467,6 +472,9 @@ func (r *Reporter) PrintDiffSummary(out io.Writer, report *Report) {
 		}
 		fmt.Fprintln(out)
 	}
+	if report.Empty() {
+		fmt.Fprintln(out, "No changes.")
+	}
 	if report.WalkBefore != nil && len(report.WalkBefore.Notification) > 0 {
 		fmt.Fprintln(out, "Walking Errors for BEFORE file:")
 		for _, err := range report.WalkBefore.Notification {
@@ -529,6 +537,8 @@ func (r *Reporter) PrintRuleSummary(out io.Writer, report *Report) {
 		if diff != "" {
 			fmt.Fprintln(out, "Walks policy diff:")
 			fmt.Fprintln(out, diff)
+		} else {
+			fmt.Fprintln(out, "No changes.")
 		}
 	}
 	if r.Verbose {
