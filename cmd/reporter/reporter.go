@@ -135,7 +135,7 @@ func main() {
 	var report *fswalker.Report
 	var errReport error
 	if before == nil {
-		fmt.Println("No before walk found. Using after walk only.")
+		fmt.Fprintln(out, "No before walk found. Using after walk only.")
 		report, errReport = rptr.Compare(nil, after.Walk)
 	} else {
 		report, errReport = rptr.Compare(before.Walk, after.Walk)
@@ -146,6 +146,12 @@ func main() {
 	rptr.PrintReportSummary(out, report)
 	rptr.PrintRuleSummary(out, report)
 	rptr.PrintDiffSummary(out, report)
+
+	fmt.Fprintln(out, "Metrics:")
+	for _, k := range report.Counter.Metrics() {
+		v, _ := report.Counter.Get(k)
+		fmt.Fprintf(out, "[%-30s] = %6d\n", k, v)
+	}
 
 	if *paginate {
 		out.Close()
@@ -159,12 +165,5 @@ func main() {
 		}
 	} else {
 		fmt.Println("not updating reviews file")
-	}
-
-	fmt.Println()
-	fmt.Println("Metrics:")
-	for _, k := range report.Counter.Metrics() {
-		v, _ := report.Counter.Get(k)
-		fmt.Printf("[%-30s] = %6d\n", k, v)
 	}
 }
