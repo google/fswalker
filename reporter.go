@@ -58,6 +58,11 @@ type Report struct {
 	WalkAfter  *fspb.Walk
 }
 
+// Empty is true if there has no additions, no deletions, no modifications and no errors.
+func (r *Report) Empty() bool {
+	return len(r.Added)+len(r.Deleted)+len(r.Modified)+len(r.Errors) == 0
+}
+
 // ActionData contains a diff between two files in different Walks.
 type ActionData struct {
 	Before *fspb.File
@@ -435,9 +440,7 @@ func (r *Reporter) PrintDiffSummary(out io.Writer, report *Report) {
 	fmt.Fprintln(out, "Object Summary:")
 	fmt.Fprintln(out, "===============================================================================")
 
-	changes := false
 	if len(report.Added) > 0 {
-		changes = true
 		fmt.Fprintf(out, "Added (%d):\n", len(report.Added))
 		for _, file := range report.Added {
 			fmt.Fprintln(out, file.After.Path)
@@ -445,7 +448,6 @@ func (r *Reporter) PrintDiffSummary(out io.Writer, report *Report) {
 		fmt.Fprintln(out)
 	}
 	if len(report.Deleted) > 0 {
-		changes = true
 		fmt.Fprintf(out, "Removed (%d):\n", len(report.Deleted))
 		for _, file := range report.Deleted {
 			fmt.Fprintln(out, file.Before.Path)
@@ -453,7 +455,6 @@ func (r *Reporter) PrintDiffSummary(out io.Writer, report *Report) {
 		fmt.Fprintln(out)
 	}
 	if len(report.Modified) > 0 {
-		changes = true
 		fmt.Fprintf(out, "Modified (%d):\n", len(report.Modified))
 		for _, file := range report.Modified {
 			fmt.Fprintln(out, file.After.Path)
@@ -465,14 +466,13 @@ func (r *Reporter) PrintDiffSummary(out io.Writer, report *Report) {
 		fmt.Fprintln(out)
 	}
 	if len(report.Errors) > 0 {
-		changes = true
 		fmt.Fprintf(out, "Reporting Errors (%d):\n", len(report.Errors))
 		for _, file := range report.Errors {
 			fmt.Fprintf(out, "%s: %v\n", file.Before.Path, file.Err)
 		}
 		fmt.Fprintln(out)
 	}
-	if !changes {
+	if report.Empty() {
 		fmt.Fprintln(out, "No changes.")
 	}
 	if report.WalkBefore != nil && len(report.WalkBefore.Notification) > 0 {
