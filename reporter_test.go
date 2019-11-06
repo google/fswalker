@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -199,9 +198,7 @@ func TestReadWalk(t *testing.T) {
 	if got.Fingerprint.Value != wantFp {
 		t.Errorf("readwalk(): fingerprint value, got=%s, want=%s", got.Fingerprint.Value, wantFp)
 	}
-	diff := cmp.Diff(got.Walk, wantWalk, cmp.FilterPath(func(p cmp.Path) bool {
-		return strings.Contains(p.String(), "XXX_")
-	}, cmp.Ignore()))
+	diff := cmp.Diff(got.Walk, wantWalk, cmp.Comparer(proto.Equal))
 	if diff != "" {
 		t.Errorf("readwalk(): content diff (-want +got):\n%s", diff)
 	}

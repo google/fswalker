@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 
 	fspb "github.com/google/fswalker/proto/fswalker"
@@ -133,7 +134,7 @@ func TestReadTextProtoReviews(t *testing.T) {
 	if err := readTextProto(ctx, filepath.Join(testdataDir, "reviews.asciipb"), reviews); err != nil {
 		t.Errorf("readTextProto() error: %v", err)
 	}
-	diff := cmp.Diff(reviews, wantReviews)
+	diff := cmp.Diff(reviews, wantReviews, cmp.Comparer(proto.Equal))
 	if diff != "" {
 		t.Errorf("readTextProto(): unexpected content: diff (-want +got):\n%s", diff)
 	}
@@ -156,7 +157,7 @@ func TestReadTextProtoConfigs(t *testing.T) {
 	if err := readTextProto(ctx, filepath.Join(testdataDir, "defaultReportConfig.asciipb"), config); err != nil {
 		t.Fatalf("readTextProto(): %v", err)
 	}
-	diff := cmp.Diff(config, wantConfig)
+	diff := cmp.Diff(config, wantConfig, cmp.Comparer(proto.Equal))
 	if diff != "" {
 		t.Errorf("readTextProto(): unexpected content: diff (-want +got):\n%s", diff)
 	}
@@ -185,7 +186,7 @@ func TestReadPolicy(t *testing.T) {
 		t.Errorf("readTextProto() error: %v", err)
 		return
 	}
-	diff := cmp.Diff(pol, wantPol)
+	diff := cmp.Diff(pol, wantPol, cmp.Comparer(proto.Equal))
 	if diff != "" {
 		t.Errorf("readTextProto() policy: diff (-want +got): \n%s", diff)
 	}
@@ -220,7 +221,7 @@ func TestWriteTextProtoReviews(t *testing.T) {
 	if err := readTextProto(ctx, tmpfile.Name(), gotReviews); err != nil {
 		t.Errorf("readTextProto() error: %v", err)
 	}
-	diff := cmp.Diff(gotReviews, wantReviews)
+	diff := cmp.Diff(gotReviews, wantReviews, cmp.Comparer(proto.Equal))
 	if diff != "" {
 		t.Errorf("writeTextProto() reviews: diff (-want +got): \n%s", diff)
 	}

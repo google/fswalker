@@ -88,7 +88,7 @@ func TestWalkerFromPolicyFile(t *testing.T) {
 		t.Errorf("WalkerFromPolicyFile() error: %v", err)
 		return
 	}
-	diff := cmp.Diff(wlkr.pol, wantPol)
+	diff := cmp.Diff(wlkr.pol, wantPol, cmp.Comparer(proto.Equal))
 	if diff != "" {
 		t.Errorf("WalkerFromPolicyFile() policy: diff (-want +got):\n%s", diff)
 	}
@@ -111,7 +111,7 @@ func TestProcess(t *testing.T) {
 			continue
 		}
 	}
-	if diff := cmp.Diff(wlkr.walk.File, files); diff != "" {
+	if diff := cmp.Diff(wlkr.walk.File, files, cmp.Comparer(proto.Equal)); diff != "" {
 		t.Errorf("wlkr.walk.File != files: diff (-want +got):\n%s", diff)
 	}
 }
@@ -293,7 +293,7 @@ func TestConvert(t *testing.T) {
 	}
 
 	gotFile = wlkr.convert(path, info)
-	diff := cmp.Diff(gotFile, wantFile)
+	diff := cmp.Diff(gotFile, wantFile, cmp.Comparer(proto.Equal))
 	if diff != "" {
 		t.Errorf("convert() File proto: diff (-want +got):\n%s", diff)
 	}
