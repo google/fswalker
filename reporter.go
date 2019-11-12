@@ -533,7 +533,7 @@ func (r *Reporter) PrintRuleSummary(out io.Writer, report *Report) {
 	fmt.Fprintln(out, "===============================================================================")
 
 	if report.WalkBefore != nil {
-		diff := cmp.Diff(report.WalkBefore.Policy, report.WalkAfter.Policy)
+		diff := cmp.Diff(report.WalkBefore.Policy, report.WalkAfter.Policy, cmp.Comparer(proto.Equal))
 		if diff != "" {
 			fmt.Fprintln(out, "Walks policy diff:")
 			fmt.Fprintln(out, diff)
