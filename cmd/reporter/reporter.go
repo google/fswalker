@@ -40,10 +40,6 @@ var (
 	updateReview = flag.Bool("update-review", false, "ask to update the \"last known good\" review")
 )
 
-const (
-	lessCmd = "/usr/bin/less"
-)
-
 func askUpdateReviews() bool {
 	fmt.Print("Do you want to update the \"last known good\" to this [y/N]: ")
 	var input string
@@ -126,21 +122,21 @@ func main() {
 	out := io.WriteCloser(os.Stdout)
 	var cmd *exec.Cmd
 	if *paginate {
-		// Use $PAGER if it is set - if not, revert to using less.
-		cmdpath := os.Getenv("PAGER")
-		if cmdpath == "" {
-			cmdpath = lessCmd
+		pager := os.Getenv("PAGER")
+		if pager == "" {
+			pager = "/usr/bin/less"
 		}
-
-		var err error
-		cmd = exec.Command(lessCmd)
-		cmd.Stdout = os.Stdout     // so less writes into stdout
-		out, err = cmd.StdinPipe() // so we write into less' input
+		// Set up pager piped with the program's stdio.
+		// Its stdin is closed later in this func, after all reports have been piped.
+		cmd = exec.Command(pager)
+		cmd.Stdout = os.Stdout
+		pipein, err := cmd.StdinPipe()
 		if err != nil {
 			log.Fatal(err)
 		}
+		out = pipein
 		if err := cmd.Start(); err != nil {
-			log.Fatalf("unable to start %q: %v", lessCmd, err)
+			log.Fatalf("unable to start %q: %v", pager, err)
 		}
 	}
 
