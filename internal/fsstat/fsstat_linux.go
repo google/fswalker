@@ -10,6 +10,7 @@ import (
 	fspb "github.com/google/fswalker/proto/fswalker"
 )
 
+// ToStat returns a fspb.ToStat with the file info from the given file
 func ToStat(info os.FileInfo) *fspb.FileStat {
 	if stat, ok := info.Sys().(*syscall.Stat_t); ok {
 		return &fspb.FileStat{
