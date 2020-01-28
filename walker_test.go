@@ -230,27 +230,30 @@ func TestConvert(t *testing.T) {
 		},
 	}
 	path := filepath.Join(testdataDir, "hashSumTest")
+	st := syscall.Stat_t{
+		Dev:     1,
+		Ino:     123456,
+		Nlink:   2,
+		Mode:    640,
+		Uid:     123,
+		Gid:     456,
+		Rdev:    111,
+		Size:    100,
+		Blksize: 128,
+		Blocks:  10,
+	}
+	atime := syscall.Timespec{Sec: time.Now().Unix(), Nsec: 100}
+	mtime := syscall.Timespec{Sec: time.Now().Unix(), Nsec: 200}
+	ctime := syscall.Timespec{Sec: time.Now().Unix(), Nsec: 300}
+	st = setTimes(st, atime, mtime, ctime)
+
 	info := &testFile{
 		name:    "hashSumTest",
 		size:    100,
 		mode:    os.FileMode(640),
 		modTime: time.Now(),
 		isDir:   false,
-		sys: &syscall.Stat_t{
-			Dev:     1,
-			Ino:     123456,
-			Nlink:   2,
-			Mode:    640,
-			Uid:     123,
-			Gid:     456,
-			Rdev:    111,
-			Size:    100,
-			Blksize: 128,
-			Blocks:  10,
-			Atim:    syscall.Timespec{time.Now().Unix(), 100},
-			Mtim:    syscall.Timespec{time.Now().Unix(), 200},
-			Ctim:    syscall.Timespec{time.Now().Unix(), 300},
-		},
+		sys:     &st,
 	}
 
 	mts, _ := ptypes.TimestampProto(info.ModTime())
@@ -275,9 +278,9 @@ func TestConvert(t *testing.T) {
 			Size:    100,
 			Blksize: 128,
 			Blocks:  10,
-			Atime:   &tspb.Timestamp{Seconds: info.sys.Atim.Sec, Nanos: 100},
-			Mtime:   &tspb.Timestamp{Seconds: info.sys.Mtim.Sec, Nanos: 200},
-			Ctime:   &tspb.Timestamp{Seconds: info.sys.Ctim.Sec, Nanos: 300},
+			Atime:   &tspb.Timestamp{Seconds: atime.Sec, Nanos: int32(atime.Nsec)},
+			Mtime:   &tspb.Timestamp{Seconds: mtime.Sec, Nanos: int32(mtime.Nsec)},
+			Ctime:   &tspb.Timestamp{Seconds: ctime.Sec, Nanos: int32(ctime.Nsec)},
 		},
 		Fingerprint: []*fspb.Fingerprint{
 			{
