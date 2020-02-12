@@ -88,7 +88,7 @@ type Walker struct {
 }
 
 // convert creates a File from the given information and if requested embeds the hash sum too.
-func (w *Walker) convert(path string, info os.FileInfo) *fspb.File {
+func (w *Walker) convert(path string, info os.FileInfo) (*fspb.File, error) {
 	path = filepath.Clean(path)
 
 	f := &fspb.File{
@@ -97,7 +97,7 @@ func (w *Walker) convert(path string, info os.FileInfo) *fspb.File {
 	}
 
 	if info == nil {
-		return f
+		return f, nil
 	}
 
 	var shaSum string
@@ -126,9 +126,12 @@ func (w *Walker) convert(path string, info os.FileInfo) *fspb.File {
 		IsDir:    info.IsDir(),
 	}
 
-	f.Stat = fsstat.ToStat(info)
+	var err error
+	if f.Stat, err = fsstat.ToStat(info); err != nil {
+		return nil, err
+	}
 
-	return f
+	return f, nil
 }
 
 // wantHashing determines whether the given path was asked to be hashed.
@@ -225,7 +228,7 @@ func (w *Walker) worker(ctx context.Context, chPaths <-chan string) error {
 		}
 		baseDev, err := fsstat.DevNumber(baseInfo)
 		if err != nil {
-			return fmt.Errorf("unable to get file stat on base path: %q, %v", path, err)
+			return fmt.Errorf("unable to get file stat on base path %q: %v", path, err)
 		}
 		if err := filepath.Walk(path, func(p string, info os.FileInfo, err error) error {
 			p = NormalizePath(p, info.IsDir())
@@ -252,7 +255,10 @@ func (w *Walker) worker(ctx context.Context, chPaths <-chan string) error {
 				}
 				return nil
 			}
-			f := w.convert(p, info)
+			f, err := w.convert(p, info)
+			if err != nil {
+				return err
+			}
 			if w.pol.MaxDirectoryDepth > 0 && info.IsDir() && w.relDirDepth(path, p) > w.pol.MaxDirectoryDepth {
 				w.addNotificationToWalk(fspb.Notification_WARNING, p, fmt.Sprintf("skipping %q: more than %d into base path %q", p, w.pol.MaxDirectoryDepth, path))
 				return filepath.SkipDir

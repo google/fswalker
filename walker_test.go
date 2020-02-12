@@ -290,12 +290,20 @@ func TestConvert(t *testing.T) {
 		},
 	}
 
-	gotFile := wlkr.convert(path, nil) // ensuring there is no problems with nil file stats.
+	gotFile, err := wlkr.convert(path, nil) // ensuring there is no problems with nil file stats.
+	if err != nil {
+		t.Fatal("unexpected error:", err)
+	}
+
 	if wantFile.Path != gotFile.Path {
 		t.Errorf("convert() path = %q; want: %q", gotFile.Path, wantFile.Path)
 	}
 
-	gotFile = wlkr.convert(path, info)
+	gotFile, err = wlkr.convert(path, info)
+	if err != nil {
+		t.Fatal("unexpected error:", err)
+	}
+
 	diff := cmp.Diff(gotFile, wantFile, cmp.Comparer(proto.Equal))
 	if diff != "" {
 		t.Errorf("convert() File proto: diff (-want +got):\n%s", diff)

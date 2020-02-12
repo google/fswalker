@@ -1,17 +1,15 @@
 package fsstat
 
 import (
-	"log"
+	"fmt"
 	"os"
 	"syscall"
-
-	tspb "github.com/golang/protobuf/ptypes/timestamp"
 
 	fspb "github.com/google/fswalker/proto/fswalker"
 )
 
 // ToStat returns a fspb.ToStat with the file info from the given file
-func ToStat(info os.FileInfo) *fspb.FileStat {
+func ToStat(info os.FileInfo) (*fspb.FileStat, error) {
 	if stat, ok := info.Sys().(*syscall.Stat_t); ok {
 		return &fspb.FileStat{
 			Dev:     stat.Dev,
@@ -24,22 +22,11 @@ func ToStat(info os.FileInfo) *fspb.FileStat {
 			Size:    stat.Size,
 			Blksize: stat.Blksize,
 			Blocks:  stat.Blocks,
-			Atime: &tspb.Timestamp{
-				Seconds: stat.Atim.Sec,
-				Nanos:   int32(stat.Atim.Nsec),
-			},
-			Mtime: &tspb.Timestamp{
-				Seconds: stat.Mtim.Sec,
-				Nanos:   int32(stat.Mtim.Nsec),
-			},
-			Ctime: &tspb.Timestamp{
-				Seconds: stat.Ctim.Sec,
-				Nanos:   int32(stat.Ctim.Nsec),
-			},
-		}
+			Atime:   timespec2Timestamp(stat.Atim),
+			Mtime:   timespec2Timestamp(stat.Mtim),
+			Ctime:   timespec2Timestamp(stat.Ctim),
+		}, nil
 	}
 
-	log.Panicf("unexpected info.Sys() type %T for %#v", info.Sys(), info)
-
-	return nil
+	return nil, fmt.Errorf("unable to get file stat for %#v", info)
 }
