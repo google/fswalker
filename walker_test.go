@@ -292,7 +292,7 @@ func TestConvert(t *testing.T) {
 
 	gotFile, err := wlkr.convert(path, nil) // ensuring there is no problems with nil file stats.
 	if err != nil {
-		t.Fatal("unexpected error:", err)
+		t.Fatal(err)
 	}
 
 	if wantFile.Path != gotFile.Path {
@@ -301,7 +301,7 @@ func TestConvert(t *testing.T) {
 
 	gotFile, err = wlkr.convert(path, info)
 	if err != nil {
-		t.Fatal("unexpected error:", err)
+		t.Fatal(err)
 	}
 
 	diff := cmp.Diff(gotFile, wantFile, cmp.Comparer(proto.Equal))

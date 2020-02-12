@@ -1,4 +1,4 @@
-// Package fsstat provides access to platform specific file stat info
+// Package fsstat provides access to platform specific file stat info.
 package fsstat
 
 import (
