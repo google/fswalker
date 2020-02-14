@@ -22,14 +22,12 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
-
-	"github.com/google/fswalker/internal/metrics"
 
 	"github.com/golang/protobuf/ptypes"
 	"github.com/google/uuid"
 
-	tspb "github.com/golang/protobuf/ptypes/timestamp"
+	"github.com/google/fswalker/internal/fsstat"
+	"github.com/google/fswalker/internal/metrics"
 	fspb "github.com/google/fswalker/proto/fswalker"
 )
 
@@ -90,7 +88,7 @@ type Walker struct {
 }
 
 // convert creates a File from the given information and if requested embeds the hash sum too.
-func (w *Walker) convert(path string, info os.FileInfo) *fspb.File {
+func (w *Walker) convert(path string, info os.FileInfo) (*fspb.File, error) {
 	path = filepath.Clean(path)
 
 	f := &fspb.File{
@@ -99,7 +97,7 @@ func (w *Walker) convert(path string, info os.FileInfo) *fspb.File {
 	}
 
 	if info == nil {
-		return f
+		return f, nil
 	}
 
 	var shaSum string
@@ -128,34 +126,12 @@ func (w *Walker) convert(path string, info os.FileInfo) *fspb.File {
 		IsDir:    info.IsDir(),
 	}
 
-	if stat, ok := info.Sys().(*syscall.Stat_t); ok {
-		f.Stat = &fspb.FileStat{
-			Dev:     stat.Dev,
-			Inode:   stat.Ino,
-			Nlink:   stat.Nlink,
-			Mode:    stat.Mode,
-			Uid:     stat.Uid,
-			Gid:     stat.Gid,
-			Rdev:    stat.Rdev,
-			Size:    stat.Size,
-			Blksize: stat.Blksize,
-			Blocks:  stat.Blocks,
-			Atime: &tspb.Timestamp{
-				Seconds: stat.Atim.Sec,
-				Nanos:   int32(stat.Atim.Nsec),
-			},
-			Mtime: &tspb.Timestamp{
-				Seconds: stat.Mtim.Sec,
-				Nanos:   int32(stat.Mtim.Nsec),
-			},
-			Ctime: &tspb.Timestamp{
-				Seconds: stat.Ctim.Sec,
-				Nanos:   int32(stat.Ctim.Nsec),
-			},
-		}
+	var err error
+	if f.Stat, err = fsstat.ToStat(info); err != nil {
+		return nil, err
 	}
 
-	return f
+	return f, nil
 }
 
 // wantHashing determines whether the given path was asked to be hashed.
@@ -250,11 +226,10 @@ func (w *Walker) worker(ctx context.Context, chPaths <-chan string) error {
 		if err != nil {
 			return fmt.Errorf("unable to get file info for base path %q: %v", path, err)
 		}
-		baseStat, ok := baseInfo.Sys().(*syscall.Stat_t)
-		if !ok {
-			return fmt.Errorf("unable to get file stat on base path: %q", path)
+		baseDev, err := fsstat.DevNumber(baseInfo)
+		if err != nil {
+			return fmt.Errorf("unable to get file stat on base path %q: %v", path, err)
 		}
-
 		if err := filepath.Walk(path, func(p string, info os.FileInfo, err error) error {
 			p = NormalizePath(p, info.IsDir())
 			if err != nil {
@@ -280,12 +255,15 @@ func (w *Walker) worker(ctx context.Context, chPaths <-chan string) error {
 				}
 				return nil
 			}
-			f := w.convert(p, info)
+			f, err := w.convert(p, info)
+			if err != nil {
+				return err
+			}
 			if w.pol.MaxDirectoryDepth > 0 && info.IsDir() && w.relDirDepth(path, p) > w.pol.MaxDirectoryDepth {
 				w.addNotificationToWalk(fspb.Notification_WARNING, p, fmt.Sprintf("skipping %q: more than %d into base path %q", p, w.pol.MaxDirectoryDepth, path))
 				return filepath.SkipDir
 			}
-			if !w.pol.WalkCrossDevice && f.Stat != nil && baseStat.Dev != f.Stat.Dev {
+			if !w.pol.WalkCrossDevice && f.Stat != nil && baseDev != f.Stat.Dev {
 				msg := fmt.Sprintf("skipping %q: file is on different device", p)
 				log.Printf(msg)
 				if w.Verbose {
