@@ -12,15 +12,15 @@ import (
 func ToStat(info os.FileInfo) (*fspb.FileStat, error) {
 	if stat, ok := info.Sys().(*syscall.Stat_t); ok {
 		return &fspb.FileStat{
-			Dev:     stat.Dev,
+			Dev:     uint64(stat.Dev),
 			Inode:   stat.Ino,
-			Nlink:   stat.Nlink,
-			Mode:    stat.Mode,
+			Nlink:   uint64(stat.Nlink),
+			Mode:    uint32(stat.Mode),
 			Uid:     stat.Uid,
 			Gid:     stat.Gid,
-			Rdev:    stat.Rdev,
+			Rdev:    uint64(stat.Rdev),
 			Size:    stat.Size,
-			Blksize: stat.Blksize,
+			Blksize: int64(stat.Blksize),
 			Blocks:  stat.Blocks,
 			Atime:   timespec2Timestamp(stat.Atim),
 			Mtime:   timespec2Timestamp(stat.Mtim),
