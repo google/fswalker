@@ -26,6 +26,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts/cmpopts"
 
 	tspb "github.com/golang/protobuf/ptypes/timestamp"
 	fspb "github.com/google/fswalker/proto/fswalker"
@@ -211,26 +212,26 @@ func TestSanityCheck(t *testing.T) {
 	testCases := []struct {
 		before  *fspb.Walk
 		after   *fspb.Walk
-		wantErr bool
+		wantErr error
 	}{
 		{
 			before:  &fspb.Walk{},
 			after:   &fspb.Walk{},
-			wantErr: true,
+			wantErr: ErrSameWalks,
 		}, {
 			before:  nil,
 			after:   &fspb.Walk{},
-			wantErr: false,
+			wantErr: nil,
 		}, {
 			before:  &fspb.Walk{},
 			after:   nil,
-			wantErr: true,
+			wantErr: cmpopts.AnyError,
 		}, {
 			before: &fspb.Walk{},
 			after: &fspb.Walk{
 				Id: "unique2",
 			},
-			wantErr: false,
+			wantErr: nil,
 		}, {
 			before: &fspb.Walk{
 				Id:        "unique1",
@@ -246,7 +247,7 @@ func TestSanityCheck(t *testing.T) {
 				StartWalk: ts2,
 				StopWalk:  ts3,
 			},
-			wantErr: false,
+			wantErr: nil,
 		}, {
 			before: nil,
 			after: &fspb.Walk{
@@ -256,7 +257,7 @@ func TestSanityCheck(t *testing.T) {
 				StartWalk: ts2,
 				StopWalk:  ts3,
 			},
-			wantErr: false,
+			wantErr: nil,
 		}, {
 			before: &fspb.Walk{
 				Id:      "unique1",
@@ -266,7 +267,7 @@ func TestSanityCheck(t *testing.T) {
 				Id:      "unique2",
 				Version: 2,
 			},
-			wantErr: true,
+			wantErr: cmpopts.AnyError,
 		}, {
 			before: &fspb.Walk{
 				Id:        "unique1",
@@ -278,7 +279,7 @@ func TestSanityCheck(t *testing.T) {
 				StartWalk: ts1,
 				StopWalk:  ts3,
 			},
-			wantErr: true,
+			wantErr: cmpopts.AnyError,
 		}, {
 			before: &fspb.Walk{
 				Id:       "unique1",
@@ -288,18 +289,15 @@ func TestSanityCheck(t *testing.T) {
 				Id:       "unique2",
 				Hostname: "testhost2",
 			},
-			wantErr: true,
+			wantErr: cmpopts.AnyError,
 		},
 	}
 
 	for _, tc := range testCases {
 		r := &Reporter{}
 		err := r.sanityCheck(tc.before, tc.after)
-		if err != nil && !tc.wantErr {
-			t.Errorf("sanityCheck() error: %v", err)
-		}
-		if err == nil && tc.wantErr {
-			t.Error("sanityCheck() no error")
+		if !cmp.Equal(tc.wantErr, err, cmpopts.EquateErrors()) {
+			t.Errorf("sanityCheck() = %v, want %v", err, tc.wantErr)
 		}
 	}
 }
