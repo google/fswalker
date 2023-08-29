@@ -177,13 +177,16 @@ func (r *Reporter) ReadLastGoodWalk(ctx context.Context, hostname, reviewFile st
 	return wf, nil
 }
 
+// ErrSameWalks is returned when comparing a walk with the same walk.
+var ErrSameWalks = fmt.Errorf("Walks are the same")
+
 // sanityCheck runs a few checks to ensure the "before" and "after" Walks are sane-ish.
 func (r *Reporter) sanityCheck(before, after *fspb.Walk) error {
 	if after == nil {
 		return fmt.Errorf("either hostname, reviewFile and walkPath OR at least afterFile need to be specified")
 	}
 	if before != nil && before.Id == after.Id {
-		return fmt.Errorf("ID of both Walks is the same: %s", before.Id)
+		return fmt.Errorf("ID of both Walks is %s: %w", before.Id, ErrSameWalks)
 	}
 	if before != nil && before.Version != after.Version {
 		return fmt.Errorf("versions don't match: before(%d) != after(%d)", before.Version, after.Version)
@@ -270,6 +273,7 @@ func (r *Reporter) diffFileInfo(fib, fia *fspb.FileInfo) ([]string, error) {
 //   - atime
 //   - inode, nlink, dev, rdev
 //   - blksize, blocks
+//
 // The following fields are ignored as they are already part of diffFileInfo() check
 // which is more guaranteed to be available (to avoid duplicate output):
 //   - mode
