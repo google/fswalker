@@ -21,7 +21,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -97,12 +96,12 @@ func writeTextProto(ctx context.Context, path string, pb proto.Message) error {
 
 // ReadFile reads the file named by filename and returns the contents.
 var ReadFile = func(_ context.Context, filename string) ([]byte, error) {
-	return ioutil.ReadFile(filename)
+	return os.ReadFile(filename)
 }
 
 // WriteFile writes data to a file named by filename.
 var WriteFile = func(_ context.Context, filename string, data []byte, perm os.FileMode) error {
-	return ioutil.WriteFile(filename, data, perm)
+	return os.WriteFile(filename, data, perm)
 }
 
 // Glob returns the names of all files matching pattern or nil if there is no matching file.
