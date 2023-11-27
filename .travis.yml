@@ -4,8 +4,8 @@ git:
 language: go
 go:
   - "master"
-  - "1.12.x"
-  - "1.11.x"
+  - "1.20.x"
+  - "1.21.x"
 env:
   global:
     - GO111MODULE=on
