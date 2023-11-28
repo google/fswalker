@@ -16,7 +16,6 @@ package fswalker
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -312,7 +311,7 @@ func TestConvert(t *testing.T) {
 
 func TestRun(t *testing.T) {
 	ctx := context.Background()
-	tmpfile, err := ioutil.TempFile("", "walk.pb")
+	tmpfile, err := os.CreateTemp("", "walk.pb")
 	if err != nil {
 		t.Fatal(err)
 	}
