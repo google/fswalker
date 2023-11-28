@@ -25,15 +25,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/fswalker/internal/metrics"
-
 	"github.com/google/go-cmp/cmp"
-
-	fspb "github.com/google/fswalker/proto/fswalker"
-
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
+
+	"github.com/google/fswalker/internal/metrics"
+	fspb "github.com/google/fswalker/proto/fswalker"
 )
 
 const (
