@@ -26,7 +26,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/proto"
 )
 
 // Generating Go representations for the proto buf libraries.
@@ -83,15 +84,18 @@ func readTextProto(ctx context.Context, path string, pb proto.Message) error {
 	if err != nil {
 		return err
 	}
-	return proto.UnmarshalText(string(b), pb)
+	return prototext.Unmarshal(b, pb)
 }
 
 // writeTextProto writes a text format proto buf for the provided proto message.
 func writeTextProto(ctx context.Context, path string, pb proto.Message) error {
-	blob := proto.MarshalTextString(pb)
+	blob, err := prototext.Marshal(pb)
+	if err != nil {
+		return err
+	}
 	// replace message boundary characters as curly braces look nicer (both is fine to parse)
-	blob = strings.Replace(strings.Replace(blob, "<", "{", -1), ">", "}", -1)
-	return WriteFile(ctx, path, []byte(blob), 0644)
+	blobStr := strings.Replace(strings.Replace(string(blob), "<", "{", -1), ">", "}", -1)
+	return WriteFile(ctx, path, []byte(blobStr), 0644)
 }
 
 // ReadFile reads the file named by filename and returns the contents.

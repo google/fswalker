@@ -22,12 +22,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
-	tspb "github.com/golang/protobuf/ptypes/timestamp"
 	fspb "github.com/google/fswalker/proto/fswalker"
 )
 
@@ -129,8 +129,8 @@ func TestReadWalk(t *testing.T) {
 		Id:        "",
 		Version:   1,
 		Hostname:  "testhost",
-		StartWalk: ptypes.TimestampNow(),
-		StopWalk:  ptypes.TimestampNow(),
+		StartWalk: timestamppb.Now(),
+		StopWalk:  timestamppb.Now(),
 		Policy: &fspb.Policy{
 			Version: 1,
 			Include: []string{
@@ -205,9 +205,9 @@ func TestReadWalk(t *testing.T) {
 }
 
 func TestSanityCheck(t *testing.T) {
-	ts1, _ := ptypes.TimestampProto(time.Now())
-	ts2, _ := ptypes.TimestampProto(time.Now().Add(time.Hour * 10))
-	ts3, _ := ptypes.TimestampProto(time.Now().Add(time.Hour * 20))
+	ts1:= timestamppb.Now()
+	ts2:= timestamppb.New(time.Now().Add(time.Hour * 10))
+	ts3:= timestamppb.New(time.Now().Add(time.Hour * 20))
 	testCases := []struct {
 		before  *fspb.Walk
 		after   *fspb.Walk
@@ -365,7 +365,7 @@ func TestDiffFile(t *testing.T) {
 				Info: &fspb.FileInfo{
 					Size:     1000,
 					Mode:     644,
-					Modified: &tspb.Timestamp{},
+					Modified: &timestamppb.Timestamp{},
 				},
 			},
 			after: &fspb.File{
@@ -374,7 +374,7 @@ func TestDiffFile(t *testing.T) {
 				Info: &fspb.FileInfo{
 					Size:     1000,
 					Mode:     644,
-					Modified: &tspb.Timestamp{},
+					Modified: &timestamppb.Timestamp{},
 				},
 			},
 			wantDiff: "",
@@ -386,7 +386,7 @@ func TestDiffFile(t *testing.T) {
 				Info: &fspb.FileInfo{
 					Size: 1000,
 					Mode: 644,
-					Modified: &tspb.Timestamp{
+					Modified: &timestamppb.Timestamp{
 						Seconds: int64(1543831000),
 					},
 				},
@@ -397,7 +397,7 @@ func TestDiffFile(t *testing.T) {
 				Info: &fspb.FileInfo{
 					Size: 1000,
 					Mode: 744,
-					Modified: &tspb.Timestamp{
+					Modified: &timestamppb.Timestamp{
 						Seconds: int64(1543931000),
 					},
 				},
@@ -410,7 +410,7 @@ func TestDiffFile(t *testing.T) {
 				Path:    "/tmp/testfile",
 				Stat: &fspb.FileStat{
 					Uid: uint32(5000),
-					Ctime: &tspb.Timestamp{
+					Ctime: &timestamppb.Timestamp{
 						Seconds: int64(1543831000),
 					},
 				},
@@ -420,7 +420,7 @@ func TestDiffFile(t *testing.T) {
 				Path:    "/tmp/testfile",
 				Stat: &fspb.FileStat{
 					Uid: uint32(0),
-					Ctime: &tspb.Timestamp{
+					Ctime: &timestamppb.Timestamp{
 						Seconds: int64(1543931000),
 					},
 				},
