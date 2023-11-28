@@ -26,12 +26,12 @@ import (
 
 	"github.com/google/fswalker/internal/metrics"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes"
 	"github.com/google/go-cmp/cmp"
 
-	tspb "github.com/golang/protobuf/ptypes/timestamp"
 	fspb "github.com/google/fswalker/proto/fswalker"
+
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type outpathWriter string
@@ -255,7 +255,7 @@ func TestConvert(t *testing.T) {
 		sys:     &st,
 	}
 
-	mts, _ := ptypes.TimestampProto(info.ModTime())
+	mts := timestamppb.New(info.ModTime())
 	wantFile := &fspb.File{
 		Version: 1,
 		Path:    path,
@@ -277,9 +277,9 @@ func TestConvert(t *testing.T) {
 			Size:    100,
 			Blksize: 128,
 			Blocks:  10,
-			Atime:   &tspb.Timestamp{Seconds: atime.Sec, Nanos: int32(atime.Nsec)},
-			Mtime:   &tspb.Timestamp{Seconds: mtime.Sec, Nanos: int32(mtime.Nsec)},
-			Ctime:   &tspb.Timestamp{Seconds: ctime.Sec, Nanos: int32(ctime.Nsec)},
+			Atime:   &timestamppb.Timestamp{Seconds: atime.Sec, Nanos: int32(atime.Nsec)},
+			Mtime:   &timestamppb.Timestamp{Seconds: mtime.Sec, Nanos: int32(mtime.Nsec)},
+			Ctime:   &timestamppb.Timestamp{Seconds: ctime.Sec, Nanos: int32(ctime.Nsec)},
 		},
 		Fingerprint: []*fspb.Fingerprint{
 			{
@@ -363,14 +363,8 @@ func TestRun(t *testing.T) {
 	if err := proto.Unmarshal(b, walk); err != nil {
 		t.Errorf("unabled to decode proto file %q: %v", tmpfile.Name(), err)
 	}
-	st, err := ptypes.Timestamp(walk.StartWalk)
-	if err != nil {
-		t.Errorf("walk.StartWalk: unable to decode start timestamp: %v", err)
-	}
-	et, err := ptypes.Timestamp(walk.StopWalk)
-	if err != nil {
-		t.Errorf("walk.StopWalk: unable to decode stop timestamp: %v", err)
-	}
+	st := walk.StartWalk.AsTime()
+	et := walk.StopWalk.AsTime()
 	if st.Before(time.Now().Add(-time.Hour)) || st.After(et) {
 		t.Errorf("start time is not within bounds: %s < %s < %s", time.Now().Add(-time.Hour), st, et)
 	}

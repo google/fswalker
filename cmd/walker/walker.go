@@ -24,8 +24,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/google/fswalker"
+	"google.golang.org/protobuf/proto"
 
 	fspb "github.com/google/fswalker/proto/fswalker"
 )

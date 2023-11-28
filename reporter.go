@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"path"
 	"sort"
 	"strings"
@@ -28,12 +27,13 @@ import (
 
 	"github.com/google/fswalker/internal/metrics"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes"
 	"github.com/google/go-cmp/cmp"
 
-	tspb "github.com/golang/protobuf/ptypes/timestamp"
 	fspb "github.com/google/fswalker/proto/fswalker"
+
+	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 const (
@@ -195,8 +195,8 @@ func (r *Reporter) sanityCheck(before, after *fspb.Walk) error {
 		return fmt.Errorf("you're comparing apples and oranges: %s != %s", before.Hostname, after.Hostname)
 	}
 	if before != nil {
-		beforeTs, _ := ptypes.Timestamp(before.StopWalk)
-		afterTs, _ := ptypes.Timestamp(after.StartWalk)
+		beforeTs := before.StopWalk.AsTime()
+		afterTs := after.StartWalk.AsTime()
 		if beforeTs.After(afterTs) {
 			return fmt.Errorf("earlier Walk indicates it ended (%s) after later Walk (%s) has started", beforeTs, afterTs)
 		}
@@ -214,18 +214,13 @@ func (r *Reporter) isIgnored(path string) bool {
 	return false
 }
 
-func (r *Reporter) timestampDiff(bt, at *tspb.Timestamp) (string, error) {
+func (r *Reporter) timestampDiff(bt, at *timestamppb.Timestamp) (string, error) {
 	if bt == nil && at == nil {
 		return "", nil
 	}
-	bmt, err := ptypes.Timestamp(bt)
-	if err != nil {
-		return "", err
-	}
-	amt, err := ptypes.Timestamp(at)
-	if err != nil {
-		return "", err
-	}
+	bmt := bt.AsTime()
+	amt := at.AsTime()
+
 	if bmt.Equal(amt) {
 		return "", nil
 	}
@@ -501,14 +496,8 @@ func (r *Reporter) PrintDiffSummary(out io.Writer, report *Report) {
 
 // printWalkSummary prints some information about the given walk.
 func (r *Reporter) printWalkSummary(out io.Writer, walk *fspb.Walk) {
-	awst, err := ptypes.Timestamp(walk.StartWalk)
-	if err != nil {
-		log.Fatalf("unable to convert after walk start timestamp: %v", err)
-	}
-	awet, err := ptypes.Timestamp(walk.StopWalk)
-	if err != nil {
-		log.Fatalf("unable to convert after walk stop timestamp: %v", err)
-	}
+	awst := walk.StartWalk.AsTime()
+	awet := walk.StopWalk.AsTime()
 	fmt.Fprintf(out, "  - ID: %s\n", walk.Id)
 	fmt.Fprintf(out, "  - Start Time: %s\n", awst)
 	fmt.Fprintf(out, "  - Stop Time: %s\n", awet)
@@ -531,7 +520,7 @@ func (r *Reporter) PrintReportSummary(out io.Writer, report *Report) {
 }
 
 // PrintRuleSummary prints the configs and policies involved in creating the Walk and Report.
-func (r *Reporter) PrintRuleSummary(out io.Writer, report *Report) {
+func (r *Reporter) PrintRuleSummary(out io.Writer, report *Report) error {
 	fmt.Fprintln(out, "===============================================================================")
 	fmt.Fprintln(out, "Rule Summary:")
 	fmt.Fprintln(out, "===============================================================================")
@@ -546,15 +535,22 @@ func (r *Reporter) PrintRuleSummary(out io.Writer, report *Report) {
 		}
 	}
 	if r.Verbose {
-		fmt.Fprintln(out, "Client Policy:")
 		policy := report.WalkAfter.Policy
 		if report.WalkBefore != nil {
 			policy = report.WalkBefore.Policy
 		}
-		fmt.Fprintln(out, proto.MarshalTextString(policy))
-		fmt.Fprintln(out, "Report Config:")
-		fmt.Fprintln(out, proto.MarshalTextString(r.config))
+
+		policyBytes, err := prototext.Marshal(policy)
+		if err != nil {
+			return err
+		}
+		configBytes, err := prototext.Marshal(r.config)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "Policy:\n%s\nReport Config:\n%s\n", string(policyBytes), string(configBytes))
 	}
+	return nil
 }
 
 // UpdateReviewProto updates the reviews file to the reviewed version to be "last known good".
@@ -564,14 +560,18 @@ func (r *Reporter) UpdateReviewProto(ctx context.Context, walkFile *WalkFile, re
 		WalkReference: walkFile.Path,
 		Fingerprint:   walkFile.Fingerprint,
 	}
-	blob := proto.MarshalTextString(&fspb.Reviews{
+	blob, err := prototext.Marshal(&fspb.Reviews{
 		Review: map[string]*fspb.Review{
 			walkFile.Walk.Hostname: review,
 		},
 	})
+	if err != nil {
+		return err
+	}
+	blobStr := string(blob)
 	fmt.Println("New review section:")
 	// replace message boundary characters as curly braces look nicer (both is fine to parse)
-	fmt.Println(strings.Replace(strings.Replace(blob, "<", "{", -1), ">", "}", -1))
+	fmt.Println(strings.Replace(strings.Replace(blobStr, "<", "{", -1), ">", "}", -1))
 
 	if reviewFile != "" {
 		reviews := &fspb.Reviews{}

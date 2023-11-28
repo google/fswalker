@@ -6,7 +6,7 @@ import (
 	"os"
 	"syscall"
 
-	tspb "github.com/golang/protobuf/ptypes/timestamp"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // DevNumber returns the device number for info
@@ -18,6 +18,6 @@ func DevNumber(info os.FileInfo) (uint64, error) {
 	return 0, fmt.Errorf("unable to get file stat for %#v", info)
 }
 
-func timespec2Timestamp(s syscall.Timespec) *tspb.Timestamp {
-	return &tspb.Timestamp{Seconds: s.Sec, Nanos: int32(s.Nsec)}
+func timespec2Timestamp(s syscall.Timespec) *timestamppb.Timestamp {
+	return &timestamppb.Timestamp{Seconds: s.Sec, Nanos: int32(s.Nsec)}
 }

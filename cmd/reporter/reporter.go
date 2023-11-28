@@ -144,7 +144,9 @@ func main() {
 		fmt.Fprintln(out, "No before walk found. Using after walk only.")
 	}
 	rptr.PrintReportSummary(out, report)
-	rptr.PrintRuleSummary(out, report)
+	if err := rptr.PrintRuleSummary(out, report); err != nil {
+		log.Fatal(err)
+	}
 	rptr.PrintDiffSummary(out, report)
 
 	fmt.Fprintln(out, "Metrics:")
