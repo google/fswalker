@@ -205,9 +205,9 @@ func TestReadWalk(t *testing.T) {
 }
 
 func TestSanityCheck(t *testing.T) {
-	ts1:= timestamppb.Now()
-	ts2:= timestamppb.New(time.Now().Add(time.Hour * 10))
-	ts3:= timestamppb.New(time.Now().Add(time.Hour * 20))
+	ts1 := timestamppb.Now()
+	ts2 := timestamppb.New(time.Now().Add(time.Hour * 10))
+	ts3 := timestamppb.New(time.Now().Add(time.Hour * 20))
 	testCases := []struct {
 		before  *fspb.Walk
 		after   *fspb.Walk
