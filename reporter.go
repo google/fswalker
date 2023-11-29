@@ -25,15 +25,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/fswalker/internal/metrics"
-
 	"github.com/google/go-cmp/cmp"
-
-	fspb "github.com/google/fswalker/proto/fswalker"
-
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
+
+	"github.com/google/fswalker/internal/metrics"
+	fspb "github.com/google/fswalker/proto/fswalker"
 )
 
 const (
@@ -356,15 +354,15 @@ func (r *Reporter) Compare(before, after *fspb.Walk) (*Report, error) {
 	walkedAfter := map[string]*fspb.File{}
 	if before != nil {
 		for _, fbOrig := range before.File {
-			fb := *fbOrig
+			fb := proto.Clone(fbOrig).(*fspb.File)
 			fb.Path = NormalizePath(fb.Path, fb.Info.IsDir)
-			walkedBefore[fb.Path] = &fb
+			walkedBefore[fb.Path] = fb
 		}
 	}
 	for _, faOrig := range after.File {
-		fa := *faOrig
+		fa := proto.Clone(faOrig).(*fspb.File)
 		fa.Path = NormalizePath(fa.Path, fa.Info.IsDir)
-		walkedAfter[fa.Path] = &fa
+		walkedAfter[fa.Path] = fa
 	}
 
 	counter := metrics.Counter{}
