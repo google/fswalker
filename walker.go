@@ -240,12 +240,19 @@ func (w *Walker) worker(ctx context.Context, chPaths <-chan string) error {
 				w.addNotificationToWalk(fspb.Notification_WARNING, p, msg)
 				return err
 			}
-			info, err := d.Info()
+			// This catches the other error state of d != nil and err != nil, indicating
+			// there was an error with the directory's ReadDir call.
 			if err != nil {
 				msg := fmt.Sprintf("failed to walk %q: %s", p, err)
 				log.Print(msg)
 				w.addNotificationToWalk(fspb.Notification_WARNING, p, msg)
 				return nil // returning SkipDir on a file would skip the rest of the files in the dir
+			}
+			info, err := d.Info()
+			if err != nil {
+				msg := fmt.Sprintf("failed to get FileInfo for %q: %s", d.Name(), err)
+				log.Print(msg)
+				return nil
 			}
 			p = NormalizePath(p, info.IsDir())
 
