@@ -231,14 +231,30 @@ func (w *Walker) worker(ctx context.Context, chPaths <-chan string) error {
 		if err != nil {
 			return fmt.Errorf("unable to get file stat on base path %q: %v", path, err)
 		}
-		if err := filepath.Walk(path, func(p string, info os.FileInfo, err error) error {
-			p = NormalizePath(p, info.IsDir())
+		if err := filepath.WalkDir(path, func(p string, d os.DirEntry, err error) error {
+			// If the initial stat of the root dir fails we can get a nil value for d along with the
+			// PathError from os.Stat. See WalkDirFunc for details.
+			if d == nil && err != nil {
+				msg := fmt.Sprintf("failed to stat root dir %q: %s", p, err)
+				log.Print(msg)
+				w.addNotificationToWalk(fspb.Notification_WARNING, p, msg)
+				return err
+			}
+			// This catches the other error state of d != nil and err != nil, indicating
+			// there was an error with the directory's ReadDir call.
 			if err != nil {
 				msg := fmt.Sprintf("failed to walk %q: %s", p, err)
-				log.Printf(msg)
+				log.Print(msg)
 				w.addNotificationToWalk(fspb.Notification_WARNING, p, msg)
 				return nil // returning SkipDir on a file would skip the rest of the files in the dir
 			}
+			info, err := d.Info()
+			if err != nil {
+				msg := fmt.Sprintf("failed to get FileInfo for %q: %s", d.Name(), err)
+				log.Print(msg)
+				return nil
+			}
+			p = NormalizePath(p, info.IsDir())
 
 			// Checking various exclusions based on flags in the walker policy.
 			if w.isExcluded(p) {
