@@ -2,7 +2,7 @@
 
 A simple and fast file system integrity checking tool in Go.
 
-[![Build Status](https://travis-ci.org/google/fswalker.svg?branch=master)](https://travis-ci.org/google/fswalker)
+[![Build Status](https://github.com/google/fswalker/actions/workflows/test.yml/badge.svg)](https://github.com/google/fswalker/actions/workflows/test.yml)
 
 ## Overview
 
