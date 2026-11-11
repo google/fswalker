@@ -101,23 +101,6 @@ func (w *Walker) convert(path string, info os.FileInfo) (*fspb.File, error) {
 		return f, nil
 	}
 
-	var shaSum string
-	// Only build the hash sum if requested and if it is not a directory.
-	if w.wantHashing(path) && !info.IsDir() && info.Size() <= w.pol.MaxHashFileSize {
-		var err error
-		shaSum, err = sha256sum(path)
-		if err != nil {
-			log.Printf("unable to build hash for %s: %s", path, err)
-		} else {
-			f.Fingerprint = []*fspb.Fingerprint{
-				{
-					Method: fspb.Fingerprint_SHA256,
-					Value:  shaSum,
-				},
-			}
-		}
-	}
-
 	mts := timestamppb.New(info.ModTime())
 	f.Info = &fspb.FileInfo{
 		Name:     info.Name(),
@@ -127,12 +110,33 @@ func (w *Walker) convert(path string, info os.FileInfo) (*fspb.File, error) {
 		IsDir:    info.IsDir(),
 	}
 
-	var err error
-	if f.Stat, err = fsstat.ToStat(info); err != nil {
+	stat, err := fsstat.ToStat(info)
+	if err != nil {
 		return nil, err
 	}
+	f.Stat = stat
+	f.Fingerprint = w.fingerprints(path, info)
 
 	return f, nil
+}
+
+// fingerprints builds content hashes for path if policy and file metadata require it.
+// fingerprints returns nil in case of error or if the policy doesn't require hashing.
+func (w *Walker) fingerprints(path string, info os.FileInfo) []*fspb.Fingerprint {
+	if !w.wantHashing(path) || !info.Mode().IsRegular() || info.Size() > w.pol.MaxHashFileSize {
+		return nil
+	}
+	shaSum, err := sha256sum(path, w.pol.MaxHashFileSize)
+	if err != nil {
+		log.Printf("failed to compute sha256 checksum for %s: %s", path, err)
+		return nil
+	}
+	return []*fspb.Fingerprint{
+		{
+			Method: fspb.Fingerprint_SHA256,
+			Value:  shaSum,
+		},
+	}
 }
 
 // wantHashing determines whether the given path was asked to be hashed.
