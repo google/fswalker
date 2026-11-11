@@ -218,15 +218,19 @@ func TestWantHashing(t *testing.T) {
 }
 
 func TestConvert(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "hashSumTest")
+	if err := os.WriteFile(path, []byte("hello"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	wlkr := &Walker{
 		pol: &fspb.Policy{
 			HashPfx: []string{
-				testdataDir,
+				dir,
 			},
 			MaxHashFileSize: 1048576,
 		},
 	}
-	path := filepath.Join(testdataDir, "hashSumTest")
 	st := syscall.Stat_t{
 		Dev:     1,
 		Ino:     123456,
@@ -282,7 +286,7 @@ func TestConvert(t *testing.T) {
 		Fingerprint: []*fspb.Fingerprint{
 			{
 				Method: fspb.Fingerprint_SHA256,
-				Value:  "aeb02544df0ef515b21cab81ad5c0609b774f86879bf7e2e42c88efdaab2c75f",
+				Value:  mustSHA256(t, path),
 			},
 		},
 	}
@@ -315,16 +319,26 @@ func TestRun(t *testing.T) {
 	}
 	defer os.Remove(tmpfile.Name()) // clean up
 
+	dir := t.TempDir()
+	smallFile := filepath.Join(dir, "small.txt")
+	if err := os.WriteFile(smallFile, []byte("hello"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	largeFile := filepath.Join(dir, "large.txt")
+	if err := os.WriteFile(largeFile, []byte("hello world"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	linkFile := filepath.Join(dir, "link.txt")
+	if err := os.Symlink(smallFile, linkFile); err != nil {
+		t.Fatal(err)
+	}
+
 	writer := outpathWriter(tmpfile.Name())
 	wlkr := &Walker{
 		pol: &fspb.Policy{
-			Include: []string{
-				testdataDir,
-			},
-			HashPfx: []string{
-				testdataDir,
-			},
-			MaxHashFileSize: 1048576,
+			Include:         []string{dir},
+			HashPfx:         []string{dir},
+			MaxHashFileSize: 6, // larger than smallFile, but smaller than largeFile.
 		},
 		WalkCallback: writer.writeWalk,
 		Counter:      &metrics.Counter{},
@@ -374,5 +388,19 @@ func TestRun(t *testing.T) {
 	}
 	if walk.Id == "" {
 		t.Error("walk.Id is empty")
+	}
+
+	gotFingerprints := map[string][]*fspb.Fingerprint{}
+	for _, f := range walk.GetFile() {
+		gotFingerprints[f.GetPath()] = f.GetFingerprint()
+	}
+	wantFingerprints := map[string][]*fspb.Fingerprint{
+		dir:       nil,
+		smallFile: {{Method: fspb.Fingerprint_SHA256, Value: mustSHA256(t, smallFile)}},
+		largeFile: nil,
+		linkFile:  nil,
+	}
+	if diff := cmp.Diff(wantFingerprints, gotFingerprints, cmp.Comparer(proto.Equal)); diff != "" {
+		t.Errorf("Run() fingerprints diff (-want +got):\n%s", diff)
 	}
 }

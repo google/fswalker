@@ -16,12 +16,16 @@ package fswalker
 
 import (
 	"context"
+	"crypto/sha256"
+	"fmt"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/protobuf/proto"
 
 	fspb "github.com/google/fswalker/proto/fswalker"
@@ -87,15 +91,62 @@ func TestNormalizePath(t *testing.T) {
 	}
 }
 
-func TestSha256sum(t *testing.T) {
-	gotHash, err := sha256sum(filepath.Join(testdataDir, "hashSumTest"))
+func mustSHA256(t *testing.T, path string) string {
+	t.Helper()
+	b, err := os.ReadFile(path)
 	if err != nil {
-		t.Errorf("sha256sum() error: %v", err)
-		return
+		t.Fatalf("os.ReadFile(%q) failed: %v", path, err)
 	}
-	const wantHash = "aeb02544df0ef515b21cab81ad5c0609b774f86879bf7e2e42c88efdaab2c75f"
-	if gotHash != wantHash {
-		t.Errorf("sha256sum() = %q; want: %q", gotHash, wantHash)
+	return fmt.Sprintf("%x", sha256.Sum256(b))
+}
+
+func TestSha256sum(t *testing.T) {
+	dir := t.TempDir()
+	content := []byte("hello world")
+	testFilePath := filepath.Join(dir, "file.txt")
+	if err := os.WriteFile(testFilePath, content, 0600); err != nil {
+		t.Fatalf("os.WriteFile(%q) failed: %v", testFilePath, err)
+	}
+	emptyPath := filepath.Join(dir, "empty")
+	if err := os.WriteFile(emptyPath, nil, 0600); err != nil {
+		t.Fatalf("os.WriteFile(%q) failed: %v", emptyPath, err)
+	}
+	symlinkPath := filepath.Join(dir, "link")
+	if err := os.Symlink(testFilePath, symlinkPath); err != nil {
+		t.Fatalf("os.Symlink(%q, %q) failed: %v", testFilePath, symlinkPath, err)
+	}
+	fifoPath := filepath.Join(dir, "pipe")
+	if err := syscall.Mkfifo(fifoPath, 0600); err != nil {
+		t.Fatalf("syscall.Mkfifo(%q) failed: %v", fifoPath, err)
+	}
+
+	fileSize := int64(len(content))
+	for _, tc := range []struct {
+		name     string
+		path     string
+		maxBytes int64
+		want     string
+		wantErr  error
+	}{
+		{name: "within_limit", path: testFilePath, maxBytes: 1048576, want: mustSHA256(t, testFilePath)},
+		{name: "exact_limit", path: testFilePath, maxBytes: fileSize, want: mustSHA256(t, testFilePath)},
+		{name: "zero_limit_empty_file", path: emptyPath, maxBytes: 0, want: mustSHA256(t, emptyPath)},
+		{name: "negative_max_bytes", path: testFilePath, maxBytes: -1, wantErr: cmpopts.AnyError},
+		{name: "exceeds_max_bytes", path: testFilePath, maxBytes: fileSize - 1, wantErr: cmpopts.AnyError},
+		{name: "nonexistent_file", path: filepath.Join(dir, "missing"), maxBytes: 1024, wantErr: cmpopts.AnyError},
+		{name: "symlink", path: symlinkPath, maxBytes: 1024, wantErr: cmpopts.AnyError},
+		{name: "fifo", path: fifoPath, maxBytes: 1024, wantErr: cmpopts.AnyError},
+		{name: "directory", path: dir, maxBytes: 1024, wantErr: cmpopts.AnyError},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := sha256sum(tc.path, tc.maxBytes)
+			if !cmp.Equal(err, tc.wantErr, cmpopts.EquateErrors()) {
+				t.Fatalf("sha256sum(%q, %d) error = %v, want %v", tc.path, tc.maxBytes, err, tc.wantErr)
+			}
+			if got != tc.want {
+				t.Errorf("sha256sum(%q, %d) = %q, want %q", tc.path, tc.maxBytes, got, tc.want)
+			}
+		})
 	}
 }
 

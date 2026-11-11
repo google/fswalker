@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -63,17 +64,39 @@ func NormalizePath(path string, isDir bool) string {
 	return p
 }
 
-// sha256sum reads the given file path and builds a SHA-256 sum over its content.
-func sha256sum(path string) (string, error) {
-	f, err := os.Open(path)
+// sha256sum reads a regular file at path up to maxBytes and builds a SHA-256
+// sum over its content. sha256sum returns an error if the file is larger than maxBytes.
+func sha256sum(path string, maxBytes int64) (string, error) {
+	if maxBytes < 0 {
+		return "", fmt.Errorf("negative max hash file size: %d", maxBytes)
+	}
+	// Open with O_NOFOLLOW to avoid following symlinks, and O_NONBLOCK so
+	// opening FIFOs or device nodes does not block.
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		return "", err
 	}
 	defer f.Close()
 
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
+	fi, err := f.Stat()
+	if err != nil {
 		return "", err
+	}
+	if !fi.Mode().IsRegular() {
+		return "", fmt.Errorf("not a regular file (mode: %s)", fi.Mode())
+	}
+	if fi.Size() > maxBytes {
+		return "", fmt.Errorf("file size (%d bytes) exceeds max hash file size (%d bytes)", fi.Size(), maxBytes)
+	}
+
+	h := sha256.New()
+	n, err := io.Copy(h, io.LimitReader(f, maxBytes+1))
+	if err != nil {
+		return "", err
+	}
+	// Check the file size again, in case the file grew when reading it.
+	if n > maxBytes {
+		return "", fmt.Errorf("file size exceeds max hash file size (%d bytes)", maxBytes)
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
